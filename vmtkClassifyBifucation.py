@@ -13,6 +13,7 @@ divergingRatioToSpacingTolerance = 2.0
 radiusArrayName = 'MaximumInscribedSphereRadius'
 
 def ReadPolyData(filename):
+    """Read poly data from filename"""
     reader = vtk.vtkXMLPolyDataReader()
     reader.SetFileName(filename)
     reader.Update()
@@ -20,6 +21,7 @@ def ReadPolyData(filename):
 
 
 def WritePolyData(input,filename):
+    """Write input to filename with vtk"""
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(filename)
     writer.SetInput(input)
@@ -27,7 +29,13 @@ def WritePolyData(input,filename):
 
 
 def getData(centerline, centerline_bif, toll):
-    # For speed up, create local function
+    """
+       Collect divergence points between the centerlines
+       and information related to the points. Also finds
+       "end" points for measuring the angles.
+    """
+
+    # For speed up and convenience, create a local function
     distance = vtk.vtkMath.Distance2BetweenPoints
 
     # Declear variables before loop incase values are not found
@@ -105,7 +113,7 @@ def getData(centerline, centerline_bif, toll):
 
 
 def move_past_sphere(centerline, center, r, start, step=-1, stop=0, X=2.5):
-    """Moves a point along the centerline until it as outside MIS"""
+    """Moves a point along the centerline until it as outside MISR times X"""
     # Create the minimal inscribed sphere
     MISphere = vtk.vtkSphere()
     MISphere.SetCenter(center)
@@ -170,6 +178,8 @@ def viz(centerline, centerline_bif, points):
 
 
 def find_angle(data, u_vec, method, dirname):
+    """Write the computed angle to file"""
+
     # Following the syntacs of Ingebrigtsen
     phi_0 = math.acos(np.dot(u_vec["bif"], u_vec[0])) * 180 / math.pi
     phi_1 = math.acos(np.dot(u_vec["bif"], u_vec[1])) * 180 / math.pi
@@ -181,9 +191,12 @@ def find_angle(data, u_vec, method, dirname):
         phi1 = phi_1
         phi2 = phi_0
 
+    # Text to be written
     text = "\nphi1_" + method + ": " + str(phi1) + "\n"
     text += "phi2_" + method + ": " + str(phi2)
     file_path = path.join(dirname, "manifest.txt")
+
+    # Check if the text exists
     if not text_exists(text, file_path):
         f = open(path.join(dirname, "manifest.txt"), "a")
         f.write(text)
@@ -191,6 +204,7 @@ def find_angle(data, u_vec, method, dirname):
 
 
 def text_exists(text, file_path):
+    """Check if text all ready is present in the file"""
     file = open(file_path, "r")
     t = file.read()
     file.close()
@@ -198,7 +212,11 @@ def text_exists(text, file_path):
 
 
 def curvature_stats(centerline, centerline_bif, data, dirname, tol):
-    #curvature = centerline_geo.GetPointData().GetArray("Curvature")
+    """
+       Find and store the mean and max curvature between all three
+       branches. Writes the results to a file.
+    """
+
     opt = data.keys()
     cases = [(opt[0], opt[1]), (opt[0], opt[2]), (opt[1], opt[2])]
     file_path = path.join(dirname, "manifest.txt")
@@ -208,7 +226,6 @@ def curvature_stats(centerline, centerline_bif, data, dirname, tol):
 
     for case in cases:
         stats = []
-        #print case
 
         if "bif" not in case:
             name = "bif"
@@ -223,9 +240,7 @@ def curvature_stats(centerline, centerline_bif, data, dirname, tol):
             key = case[0] if case[0] != "bif" else case[1]
             key_comp = 0 if key == 1 else 1
             name = "1" if data[key]["r_end"] > data[key_comp]["r_end"] else "2"   
-            #print key
             centerline.GetCellPoints(key, points_ids)
-            #print centerline.GetNumberOfLines()
             curvature = centerline.GetPointData().GetArray("Curvature")
              
             end_point = data[key]["div_point"]
@@ -237,36 +252,13 @@ def curvature_stats(centerline, centerline_bif, data, dirname, tol):
 
             # Collect curvature from desired area
             while dist_prev >= dist:
-                #print i
-                #print dist, tol
                 stats.append(curvature.GetTuple1(points_ids.GetId(i)))
-                #points.append(centerline.GetPoint(points_ids.GetId(i)))
                 point = centerline.GetPoint(points_ids.GetId(i))
 
-                #dist_prev_2 = dist_prev_1
                 dist_prev = dist
                 dist = math.sqrt(np.sum(abs(np.asarray(end_point) - 
                                             np.asarray(point))))
                 i += 1
-        """
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        arr = np.asarray(points)
-        x = arr[:,0]
-        y = arr[:,1]
-        z = arr[:,2]
-        ax.plot(x, y, z, label=i)
-        plt.hold("on")
-        ax.plot([end_point[0]], [end_point[1]], [end_point[2]], "o", label="point")
-        p = data[key_comp]["div_point"]
-        ax.plot([p[0]], [p[1]], [p[2]], "o", label="point_other")
-        ax.legend()
-        plt.show()
-
-        sys.exit(0) 
-        """
 
         # Get stats
         stats = np.asarray(stats)
@@ -276,7 +268,8 @@ def curvature_stats(centerline, centerline_bif, data, dirname, tol):
         # Write to file
         text = "\ncurvature_max_%s: %s\ncurvature_mean_%s: %s" % \
                 (name, max_, name, mean)
-        #print text
+
+        # Text all ready exists
         if not text_exists(text, file_path):
             f = open(path.join(dirname, "manifest.txt"), "a")
             f.write(text)
@@ -284,6 +277,7 @@ def curvature_stats(centerline, centerline_bif, data, dirname, tol):
     
 
 def angle_stats(data):
+    """Three different ways to compute the angles"""
     # Create unit vectors
     for method in ["mean", "div", "bif_half"]:
         u_vec = {}
@@ -403,4 +397,3 @@ if __name__ == "__main__":
         if path.isdir(folder) and folder != "backup":
             print "Looking at case", folder
             main(folder)
-    #main("C0039")
