@@ -154,7 +154,7 @@ def SplineCenterline(centerline, resampledCl, numberOfOutputPoints):
       radius = radiusArray.GetTuple1(i)
       sphereSpline.AddPoint(j, radius)
       j += 1
-
+ 
    numberOfInputSpheres = j
 
    # Generate poly line for spline for the radius
@@ -164,9 +164,9 @@ def SplineCenterline(centerline, resampledCl, numberOfOutputPoints):
 
    # Create new spheres
    print numberOfOutputPoints
-   for i in range (0,numberOfOutputPoints):
-       t = (numberOfInputSpheres-1.0)/(numberOfOutputPoints-1.0)*i
-       splineSphereArray.SetValue(i,sphereSpline.Evaluate(t))
+   for i in range (0, numberOfOutputPoints):
+       t = (numberOfInputSpheres - 1.0) / (numberOfOutputPoints - 1.0) * i
+       splineSphereArray.SetValue(i, sphereSpline.Evaluate(t))
 
    splineVtp.SetPoints(splinePoints)  
    splineVtp.SetLines(linesSpline)          

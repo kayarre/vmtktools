@@ -1,7 +1,7 @@
 import vtk
 import numpy as np
 import sys
-from sympy.interpolate import splrep, splev
+import math
 
 # Global names
 radiusArrayName = 'MaximumInscribedSphereRadius'
@@ -82,7 +82,7 @@ def read_dat(filename):
     return data, header
         
         
-def data_to_vtkPolyData(data, header):
+def data_to_vtkPolyData(data, header, TNB=None, PT=None):
     line = vtk.vtkPolyData()
     cellArray = vtk.vtkCellArray()
     cellArray.InsertNextCell(data.shape[0])
@@ -97,15 +97,51 @@ def data_to_vtkPolyData(data, header):
         radiusArray.FillComponent(0, 0.0)
         info_array.append(radiusArray)
 
+    if TNB is not None:
+        for i in range(3):
+            radiusArray = vtk.vtkDoubleArray()
+            radiusArray.SetNumberOfComponents(3)
+            radiusArray.SetNumberOfTuples(data.shape[0])
+            radiusArray.SetName(header[i+data.shape[1]])
+            radiusArray.FillComponent(0, 0.0)
+            radiusArray.FillComponent(1, 0.0)
+            radiusArray.FillComponent(2, 0.0)
+            info_array.append(radiusArray)
+
+    if PT is not None:
+        start = data.shape[1] if TNB is None else data.shape[1] + 3
+        for i in range(2):
+            radiusArray = vtk.vtkDoubleArray()
+            radiusArray.SetNumberOfComponents(3)
+            radiusArray.SetNumberOfTuples(PT[0].shape[0])
+            radiusArray.SetName(header[i+start])
+            radiusArray.FillComponent(0, 0.0)
+            radiusArray.FillComponent(1, 0.0)
+            radiusArray.FillComponent(2, 0.0)
+            info_array.append(radiusArray)
+
     for i in range(data.shape[0]):
         cellArray.InsertCellPoint(i)
         linePoints.InsertNextPoint(data[i,:3])
         for j in range(3, data.shape[1]):
             info_array[j-3].SetTuple1(i, data[i, j])
-    
+
+    if TNB is not None:
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]-3, data.shape[1], 1):
+                tnb_ = TNB[j - data.shape[1]][i,:]
+                info_array[j].SetTuple3(i, tnb_[0], tnb_[1], tnb_[2])
+
+    if PT is not None:
+        start = data.shape[1]-3 if TNB is None else data.shape[1]
+        for i in range(PT[-1].shape[0]):
+            for j in range(start, start + 2, 1):
+                pt_ = PT[j - start][i, :]
+                info_array[j].SetTuple3(i, pt_[0], pt_[1], pt_[2])
+
     line.SetPoints(linePoints)
     line.SetLines(cellArray)
-    for i in range(data.shape[1] - 3):
+    for i in range(len(header) - 3):
         line.GetPointData().AddArray(info_array[i])
 
     return line
@@ -138,53 +174,20 @@ def ExtractSingleLine(centerlines, id):
    return line
 
 
-def splineCenterline(centerline):
-    # Alloimport matplotlib.pyplot as pltcate data structure to store centerline points
-    data = []
-    curv_coor = []
-    for i in range(centerline.GetNumberOfCells()):
-        data.append(zeros((centerline.GetCell(i).GetNumberOfPoints(), 3)))
-
-    # Collect data from centerline
-    for i in range(centerline.GetNumberOfCells()):
-        line = ExtractSingleLine(centerline, i)
-        curv_coor.append(get_curvilinear_coordinate(line))
-        cell = vtk.vtkGenericCell()
-        centerline.GetCell(i, cell)
-        for j in range(cell.GetGetNumberOfPoints()):
-            data[i][i,:] = cell.GetPoints().GetPoint(j)
-
-
-    # least square fit of the centerline
-    interpolated_data = []
-    interpolated_data_1 = []
-    interpolated_data_2 = []
-    for i in len(data):
-        fx = splrep(curv_coor[i], data[i][:,0], k=7)
-        fy = splrep(curv_coor[i], data[i][:,1], k=7)
-        fz = splrep(curv_coor[i], data[i][:,2], k=7)
-
-        interpolated_data.append([fx, fy, fz])
-
-        dlsfx = splev(curv_coor[i], fx, der=1)
-        dlsfy = splev(curv_coor[i], fy, der=1)
-        dlsfz = splev(curv_coor[i], fz, der=1)
-
-        ddlsfx = splev(curv_coor[i], fx, der=2)
-        ddlsfy = splev(curv_coor[i], fy, der=2)
-        ddlsfz = splev(curv_coor[i], fz, der=2)
-
-        C1xC2_1 = ddlsfz * dlsfy - ddlsfy * dlsfz
-        C1xC2_2 = ddlsfx * dlsfz - ddlsfz * dlsfx
-        C1xC2_3 = ddlsfy*dlsfx - ddlsfx * dlsfy
-
-        lscurvature = np.sqrt(C1xC2_1**2 + C1xC2_2**2 + C1xC2_3**2) / \
-                             (dlsfx**2 + dlsfy**2 + dlsfz**2)**1.5
-
-        from matplotlib.pyplot import *
-        plot(curv_coor[i], lscurvature)
-        show()
-        sys.exit(0)
+def R(n, t):
+    cos = math.cos
+    sin = math.sin
+    n1 = n[0]; n2 = n[1]; n3 = n[2]
+    r = np.array([[cos(t) + n1**2 * (1 - cos(t)),   \
+                   n1*n2*(1 - cos(t)) - sin(t)*n3,  \
+                   n3*n1*(1 - cos(t)) + sin(t)*n2], \
+                  [n1*n2*(1 - cos(t)) + sin(t)*n3,  \
+                   cos(t) + n2**2*(1 - cos(t)),     \
+                   n3*n2*(1 - cos(t)) - sin(t)*n1], \
+                  [n1*n3*(1 - cos(t)) - sin(t)*n2,  \
+                   n2*n3*(1 - cos(t)) + sin(t)*n1,  \
+                   cos(t) + n3**2*(1 - cos(t))]])
+    return r
 
 
 def viz(centerline, points):
