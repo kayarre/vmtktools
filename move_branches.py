@@ -315,4 +315,4 @@ def main(dirpath, smooth=1, dir_out_path=None):
 
 
 if  __name__ == "__main__": 
-    main("C0039")
+    main("C0013")

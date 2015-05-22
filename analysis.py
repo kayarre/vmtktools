@@ -8,7 +8,6 @@ import math
 import os
 import matplotlib
 from pylab import *
-
 from vmtk import pypes, vtkvmtk
 from numpy import zeros, array, linspace
 from scipy.interpolate import splprep, splev 
@@ -111,7 +110,8 @@ def CutWithPlane(input, origin, normal):
    return section2
     
 
-def SplineCenterline(centerline, resampledCl, numberOfOutputPoints):
+#def SplineCenterline(centerline, resampledCl, numberOfOutputPoints):
+def SplineCenterline(resampledCl, numberOfOutputPoints):
    inputPoints = resampledCl.GetPoints()
    aSplineX = vtk.vtkCardinalSpline()
    aSplineY = vtk.vtkCardinalSpline()
@@ -144,39 +144,39 @@ def SplineCenterline(centerline, resampledCl, numberOfOutputPoints):
        linesSpline.InsertCellPoint(i)
     
    # spline the radius array  
-   radiusArray=centerline.GetPointData.GetArray('MaximumInscribedSphereRadius')
-   radiusArrayResampled=vtk.vtkDoubleArray()
-   sphereSpline=vtk.vtkCardinalSpline()
+   #radiusArray=centerline.GetPointData.GetArray('MaximumInscribedSphereRadius')
+   #radiusArrayResampled=vtk.vtkDoubleArray()
+   #sphereSpline=vtk.vtkCardinalSpline()
 
-   j = 0
-   stepsOfInputSphereSpline = 9
-   for i in range(0, radiusArray.GetNumberOfTuples(), stepsOfInputSphereSpline):
-      radius = radiusArray.GetTuple1(i)
-      sphereSpline.AddPoint(j, radius)
-      j += 1
+   #j = 0
+   #stepsOfInputSphereSpline = 9
+   #for i in range(0, radiusArray.GetNumberOfTuples(), stepsOfInputSphereSpline):
+   #   radius = radiusArray.GetTuple1(i)
+   #   sphereSpline.AddPoint(j, radius)
+   #   j += 1
  
-   numberOfInputSpheres = j
+   #numberOfInputSpheres = j
 
    # Generate poly line for spline for the radius
-   splineSphereArray.SetName('MaximumInscribedSphereRadius')
-   splineSphereArray.SetNumberOfComponents(1)
-   splineSphereArray.SetNumberOfTuples(numberOfOutputPoints)
+   #splineSphereArray.SetName('MaximumInscribedSphereRadius')
+   #splineSphereArray.SetNumberOfComponents(1)
+   #splineSphereArray.SetNumberOfTuples(numberOfOutputPoints)
 
    # Create new spheres
-   print numberOfOutputPoints
-   for i in range (0, numberOfOutputPoints):
-       t = (numberOfInputSpheres - 1.0) / (numberOfOutputPoints - 1.0) * i
-       splineSphereArray.SetValue(i, sphereSpline.Evaluate(t))
+   #print numberOfOutputPoints
+   #for i in range (0, numberOfOutputPoints):
+   #    t = (numberOfInputSpheres - 1.0) / (numberOfOutputPoints - 1.0) * i
+   #    splineSphereArray.SetValue(i, sphereSpline.Evaluate(t))
 
    splineVtp.SetPoints(splinePoints)  
    splineVtp.SetLines(linesSpline)          
-   splineVtp.GetPointData().AddArray(splineSphereArray)
+   #splineVtp.GetPointData().AddArray(splineSphereArray)
 
    return splineVtp
 
 
 def AverageCenterline2(outdirectory,apexCl,icaCl,ecaCl):
-    """This method of averaging centerine is the intilligent one, tfor finding the
+   """This method of averaging centerine is the intilligent one, tfor finding the
        closest point on the centerline for each point of the other centerline , the
        cut plane cuts the first centerline first"""
    from numpy import zeros,array, linspace
@@ -368,7 +368,8 @@ def ResamplingCenterline(inputLine, numberOfInputPoints, numberOfOutputPoints):
 
 
 def CenterlineAttribiute(clFileName, clAttribiuteFileName, length, factor):
-   command='vmtkcenterlineresampling -ifile '+clFileName+' -length '+length+' --pipe vmtkcenterlineattributes --pipe vmtkcenterlinegeometry -ofile '+clAttribiuteFileName+'  -smoothing 1 -factor '+factor+' -outputsmoothed 1 -iterations 100 '
+   #command='vmtkcenterlineresampling -ifile '+clFileName+' -length '+length+' --pipe vmtkcenterlineattributes --pipe vmtkcenterlinegeometry -ofile '+clAttribiuteFileName+'  -smoothing 1 -factor '+factor+' -outputsmoothed 1 -iterations 100 '
+   command='vmtkcenterlineattributes -ifile '+clFileName+' --pipe vmtkcenterlinegeometry -ofile '+clAttribiuteFileName+'  -smoothing 0'
    os.system(command)
 
 
@@ -409,10 +410,10 @@ def tortuosity(attribute):
         if  xfrenetNormal>0 and yfrenetNormal <0:
             angle=360+numpy.degrees(tortuosityAngle)
 
-      #tortuosityAngle=numpy.arccos(xfrenetNormal/numpy.sqrt(xfrenetNormal*xfrenetNormal+yfrenetNormal*yfrenetNormal))
-      #tortuosityAngle=(tortuosityAngle/math.pi)*180
-      #tortuosity.SetTuple1(i,tortuosityAngle)
-      tortuosity.SetTuple1(i,angle)
+        #tortuosityAngle=numpy.arccos(xfrenetNormal/numpy.sqrt(xfrenetNormal*xfrenetNormal+yfrenetNormal*yfrenetNormal))
+        #tortuosityAngle=(tortuosityAngle/math.pi)*180
+        #tortuosity.SetTuple1(i,tortuosityAngle)
+        tortuosity.SetTuple1(i,angle)
     
     attribute.GetPointData().AddArray(tortuosity)
     return attribute

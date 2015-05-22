@@ -34,12 +34,41 @@ def get_curvilinear_coordinate(line):
     return curv_coor
 
 
-def get_array(arrayName, line):
-    array = np.zeros(line.GetNumberOfPoints())
+def get_array(arrayName, line, k=1):
+    array = np.zeros((line.GetNumberOfPoints(), k))
+    vtkArray = line.GetPointData().GetArray(arrayName)
+    if k == 1:
+        getData = line.GetPointData().GetArray(arrayName).GetTuple1
+    elif k == 2:
+        getData = line.GetPointData().GetArray(arrayName).GetTuple2
+    elif k ==3:
+        getData = line.GetPointData().GetArray(arrayName).GetTuple3
+
     for i in range(line.GetNumberOfPoints()):
-        array[i] = line.GetPointData().GetArray(arrayName).GetTuple1(i)
+        array[i,:] = getData(i)
 
     return array
+
+
+def create_vtk_array(values, name, k=1):
+    vtkArray = vtk.vtkDoubleArray()
+    vtkArray.SetNumberOfComponents(k)
+    vtkArray.SetNumberOfTuples(values.shape[0])
+    vtkArray.SetName(name)
+    for i in range(k):
+        vtkArray.FillComponent(i, 0.0)
+
+    if k == 1:
+        for i in range(values.shape[0]):
+            vtkArray.SetTuple1(i, values[i])
+    elif k == 2:
+        for i in range(values.shape[0]):
+            vtkArray.SetTuple2(i, values[i,0], values[i,1])
+    elif k == 3:
+        for i in range(values.shape[0]):
+            vtkArray.SetTuple3(i, values[i,0], values[i,1], values[i,2])
+
+    return vtkArray
 
 
 def GramSchmidt(V):
