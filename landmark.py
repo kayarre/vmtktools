@@ -2,7 +2,7 @@ from common import *
 from patchandinterpolatecenterlines import *
 import numpy as np
 from scipy.interpolate import splrep, splev
-from scipy.signal import argrelextrema
+from scipy.signal import argrelextrema, gaussian
 import math
 import subprocess
 
@@ -173,8 +173,12 @@ def landmarking(centerline_patch_path):
     
 
     X = np.zeros(length.shape[0])
+    Y = np.zeros(length.shape[0])
+    Z = np.zeros(length.shape[0])
     for i in range(X.shape[0]):
         X[i] = line.GetPoints().GetPoint(i)[0]
+        Y[i] = line.GetPoints().GetPoint(i)[1]
+        Z[i] = line.GetPoints().GetPoint(i)[2]
 
     # Tolerance parameters from Bogunevic et al. (2012)
     tol_ant_post = 60
@@ -182,13 +186,24 @@ def landmarking(centerline_patch_path):
     tol_post_inf = 45
     tol_inf_end = 110
 
-    #TODO: Something more sofisticated than max if there is multiple max points?
-    max_coronal_ids = argrelextrema(X, np.greater)[0].max()
+    # TODO: Test not flipped
+    if Z.min() not in Z[argrelextrema(X, np.less)[0]]:
+        value_index = Z[argrelextrema(Z, np.less)[0]].min()
+        max_coronal_ids = np.array(Z.tolist().index(value_index))
+    else:
+        value_index = Z[argrelextrema(Z, np.greater)[0]].max()
+        max_coronal_ids = np.array(Z.tolist().index(value_index))
+
+    #from matplotlib.pyplot import *
+    #viz(line, [[X[max_coronal_ids], Y[max_coronal_ids], Z[max_coronal_ids]]])
+    #plot(length, Z, length[max_coronal_ids], Z[max_coronal_ids], 'g^')
+    #show()
+
+    # TODO: Make some recursive function of this algorithm
     index = np.array((max_coronal_ids > max_point_ids).nonzero()[0]).max()
-    angle = tetha[:index].tolist()
-    for i in range(index-1, 0, -1):
-        print "i", i, angle[i]
-        if angle[i] > tol_ant_post:
+    for i in range(index-1, -1, -1):
+        print "i", i, tetha[i]
+        if tetha[i] > tol_ant_post:
             break
 
     start = max_point_ids[i]
@@ -198,9 +213,9 @@ def landmarking(centerline_patch_path):
     min_point = min_point_ids[index]
     interfaces = {'ant_post': min_point}
 
-    for j in range(i-1, 0, -1):
-        print "j", j, angle[j]
-        if angle[j] > tol_post_inf:
+    for j in range(i-1, -1, -1):
+        print "j", j, tetha[j]
+        if tetha[j] > tol_post_inf:
             break
 
     start = max_point_ids[j]
@@ -210,58 +225,99 @@ def landmarking(centerline_patch_path):
     min_point = min_point_ids[index]
     interfaces["post_inf"] = min_point
 
-    for k in range(j-1, 0, -1):
-        print "k", k, angle[k]
-        if angle[k] > tol_inf_end:
+    stopped = False
+    for k in range(j-1, -1, -1):
+        print "k", k, tetha[k]
+        if tetha[k] > tol_inf_end:
+            stopped = True
             break
 
-    start = max_point_ids[k]
-    stop = max_point_ids[k + 1]
+    # TODO: If the geometry is not long enough let inferior bend be at end
+    #       point. The same test needs to be done for each landmark.
+    if stopped:
+        start = max_point_ids[k]
+        stop = max_point_ids[k + 1]
+        min_point_ids = np.array(min_point_ids)
+        index = ((min_point_ids > start) * (min_point_ids < stop)).nonzero()[0]
+        min_point = min_point_ids[index]
+        interfaces["inf_end"] = min_point
+    else:
+        print "End is end"
+
+    index = np.array((max_coronal_ids > max_point_ids).nonzero()[0]).max()
+    for l in range(index, tetha.shape[0]):
+        print "l", l, tetha[l]
+        if tetha[l] > tol_sup_ant:
+            break
+
+    start = max_point_ids[l]
+    stop = max_point_ids[l + 1]
     min_point_ids = np.array(min_point_ids)
     index = ((min_point_ids > start) * (min_point_ids < stop)).nonzero()[0]
     min_point = min_point_ids[index]
-    interfaces["inf_end"] = min_point
+    interfaces['sup_ant'] = min_point
 
-    print interfaces
+    bends = ["inferior", "posterior", "anterior", "superior"]
+    values = [interfaces["inf_end"], interfaces["post_inf"],
+              interfaces["ant_post"], interfaces["sup_ant"], 
+              curvature.shape[0]]
 
     from matplotlib.pyplot import *
-    #print max_coronal_ids
-    #plot(length, X)
-    #plot(length[max_coronal_ids], X[max_coronal_ids], 'bs')
-    #show()
-  
-    #point = [[float(X[max_coronal_ids]), float(Y[max_coronal_ids]),
-    #    float(Z[max_coronal_ids])]]
-    #print point
-    point = [line.GetPoints().GetPoint(k) for k in interfaces.values()]# +
-    #        [max_coronal_ids]]
-    #viz(line, point)
-    fig = figure()
-    ax = fig.add_subplot(111)
+    max_landmarks = {}
+    for i in range(len(bends)):
+        curv_part = curvature[values[i]: values[i+1] + 1]
+        max_new = argrelextrema(curv_part, np.greater)[0]
+        print max_new
+        plot(length[values[i]: values[i+1] +1], curv_part) 
+        while max_new.shape[0] > 1:
+            Gauss = gaussian(curv_part.shape[0], std=5)
+            new = np.convolve(curv_part, Gauss, 'same')
+            max_new = argrelextrema(new, np.greater)[0]
 
-    #plot(k1[:-10], k2[:-10])
-    plot(length, curvature)
-    hold("on")
-    #for i in min_point_ids:
-        #plot(length[i], curvature[i], 'g^')
-    plot([length[max_coronal_ids], length[max_coronal_ids]], [0,1]) 
-        #plot(k1[i], k2[i], 'g^')
-    c = 0
-    for key, value in interfaces.iteritems():
-        plot(length[value], curvature[value], 'bs')
-        #plot(k1[i], k2[i], 's', label=c)
-        #print (float(k1[i, k2[i])
-        ax.annotate('%s' % c, xy=(float(length[value]),
-            float(curvature[value])), textcoords='offset points')
-        c += 1
-    for p in max_point_ids:
-        plot(length[p], curvature[p], "b^")
+        max_landmarks[bends[i]] = max_new
 
-    torsion = get_array("Torsion", line)
-    plot(length, torsion)
-    legend()
-    grid()
-    show()
+    print max_landmarks
+
+    if 0:
+        #print max_coronal_ids
+        #plot(length, X)
+        #plot(length[max_coronal_ids], X[max_coronal_ids], 'bs')
+        #show()
+    
+        #point = [[float(X[max_coronal_ids]), float(Y[max_coronal_ids]),
+        #    float(Z[max_coronal_ids])]]
+        #print point
+        point = [line.GetPoints().GetPoint(k) for k in interfaces.values()]# +
+        #        [max_coronal_ids]]
+        #viz(line, point)
+        fig = figure()
+        ax = fig.add_subplot(111)
+    
+        #plot(k1[:-10], k2[:-10])
+        plot(length, curvature)
+        hold("on")
+        #for i in min_point_ids:
+            #plot(length[i], curvature[i], 'g^')
+        plot([length[max_coronal_ids], length[max_coronal_ids]], [0,1]) 
+            #plot(k1[i], k2[i], 'g^')
+        c = 0
+        for key, value in interfaces.iteritems():
+            plot(length[value], curvature[value], 'bs')
+            #plot(k1[i], k2[i], 's', label=c)
+            #print (float(k1[i, k2[i])
+            ax.annotate('%s' % c, xy=(float(length[value]),
+                float(curvature[value])), textcoords='offset points')
+            c += 1
+        for p in max_point_ids:
+            plot(length[p], curvature[p], "b^")
+    
+        torsion = get_array("Torsion", line)
+        #plot(length, torsion)
+        legend()
+        grid()
+        show()
+    
+        viz(line, point)
 
 if __name__ == '__main__':
     landmarking("C0013/surface/cl_patch.vtp")

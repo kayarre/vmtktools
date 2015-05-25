@@ -271,6 +271,7 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        
     return finalNewVoronoiPoints, finalRadiusArray
 
+
 def ExtractLine(cellid,centerlines):
    cell = vtk.vtkGenericCell()
    centerlines.GetCell(cellid,cell)
@@ -301,6 +302,7 @@ def ExtractLine(cellid,centerlines):
    line.GetPointData().AddArray(ptnArray)
    return line
 
+
 def ComputeVoronoiVectorToCenterlineAngle(pointId,vector,centerline):
     point0 = [0.0,0.0,0.0]
     point1 = [0.0,0.0,0.0]
@@ -321,6 +323,7 @@ def ComputeVoronoiVectorToCenterlineAngle(pointId,vector,centerline):
 
     alpha = ComputeAngleBetweenVectors(ptnnormal,tangent,vector)
     return alpha
+
 
 def ComputeAngleBetweenVectors(normal,tangent,vector):
     #compute the tangent component orthogonal to normal 
@@ -350,6 +353,7 @@ def ComputeAngleBetweenVectors(normal,tangent,vector):
     angle = -theta
     return angle 
 
+
 def ComputeSpline(startValue,endValue,numberOfPoints):
    averageValue = (startValue + endValue)/2.0
    averageId = int(numberOfPoints/2) 
@@ -369,6 +373,7 @@ def ComputeSpline(startValue,endValue,numberOfPoints):
       splineArray.SetTuple1(i,spline.Evaluate(float(i)))
 
    return splineArray 
+
 
 def InsertNewVoronoiPoints(oldDataset,newPoints,newArray):
    numberOfDatasetPoints = oldDataset.GetNumberOfPoints()
@@ -442,7 +447,8 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
     # The new patch or the entire new?
     numberOfInterpolatedCenterlinesCells = interpolatedCenterlines.GetNumberOfCells()
 
-    for j in range(1, numberOfInterpolatedCenterlinesCells + 1):
+    for j in range(1, 3):# numberOfInterpolatedCenterlinesCells + 1):
+        print j
         interpolationCellId = j - 1
         startId = 0
         endId = j
@@ -497,4 +503,4 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                     newVoronoiPointsMISR)
 
-        return completeVoronoiDiagram
+    return completeVoronoiDiagram
