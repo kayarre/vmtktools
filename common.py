@@ -56,6 +56,16 @@ def get_array(arrayName, line, k=1):
     return array
 
 
+def get_vtk_array(name, comp, num)
+    array = vtk.vtkDoubleArray()
+    array.SetNumberOfComponents(comp)
+    array.SetNumberOfTuples(num)
+    for i in range(comp):
+        array.FillComponent(i, 0.0)
+    array.SetName(radiusArrayName)
+    return array
+
+
 def get_locator(centerline):
     locator = vtk.vtkPointLocator()
     locator.SetDataSet(centerline)

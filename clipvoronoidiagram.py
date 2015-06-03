@@ -119,67 +119,35 @@ def ExtractMaskedVoronoiPoints(voronoi,maskArray):
 
 
 def SmoothClippedVoronoiDiagram(voronoi, centerlines, smoothingFactor):
-   numberOfPoints = voronoi.GetNumberOfPoints()
-   numberOfCenterlinesPoints = centerlines.GetNumberOfPoints()
+    numberOfPoints = voronoi.GetNumberOfPoints()
 
-   maskArray = vtk.vtkIntArray()
-   maskArray.SetNumberOfComponents(1)
-   maskArray.SetNumberOfTuples(numberOfPoints)
-   maskArray.FillComponent(0,0)
+    threshold = get_array(radiusArrayName, centerlines) * (1 - smoothingFactor)
+    locator = get_locator(centerlines)
 
-   for i in range(numberOfCenterlinesPoints):
-     localRadius = centerlines.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
+    smoothedDiagram = vtk.vtkPolyData()
+    points = vtk.vtkPoints()
+    cellArray = vtk.vtkCellArray()
+    radiusArrayNumpy = zeros(numberOfPoints)
 
-     threshold = localRadius * (1.0 - smoothingFactor) 
+    count = 0
+    for i in range(numberOfPoints):
+        point = voronoi.GetPoint(i)
+        radius = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
+        id = locator.FindClosestPoint(point)
+        if radius <= threshold[id]:
+            points.InsertNextPoint(point)
+            cellArray.InsertNextCell(1)
+            cellArray.InsertCellPoint(count)
+            radiusArrayNumy[count] = radius
+            count += 1
 
-     sphere = vtk.vtkSphere()
-     sphere.SetRadius(localRadius)
-     sphere.SetCenter(centerlines.GetPoint(i))
+    radiusArray = get_vtk_array(radiusArrayName, 1, count)
+    
+    for i in range(count):
+        radiusArrayName.SetTuple1(i, radius[i])
 
-     localMaskArray = vtk.vtkIntArray()
-     localMaskArray.SetNumberOfComponents(1)
-     localMaskArray.SetNumberOfTuples(numberOfPoints)
-     localMaskArray.FillComponent(0,0)
+    smoothedDiagram.SetPoints(points)
+    smoothedDiagram.SetVerts(cellArray)
+    smoothedDiagram.GetPointData().AddArray(radiusArray)
 
-     for j in range(numberOfPoints):
-        value = sphere.EvaluateFunction(voronoi.GetPoint(j))    
-        if (value <= 0.0):
-           localMaskArray.SetTuple1(j, 1) 
-
-     for j in range(numberOfPoints):
-       value = localMaskArray.GetTuple1(j)
-       if (value == 1):
-          r = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(j) 
-          if (r > threshold):
-             maskArray.SetTuple1(j, 1)
-
-   finalNumberOfMaskedPoints = ComputeNumberOfMaskedPoints(maskArray)
-   print 'from original number of points ', numberOfPoints,'to ',finalNumberOfMaskedPoints
-
-   smoothedDiagram = vtk.vtkPolyData()
-   points = vtk.vtkPoints()
-   cellArray = vtk.vtkCellArray()
-
-   radiusArray = vtk.vtkDoubleArray()
-   radiusArray.SetNumberOfComponents(1)
-   radiusArray.SetNumberOfTuples(finalNumberOfMaskedPoints)
-   radiusArray.FillComponent(0, 0.0)
-   radiusArray.SetName(radiusArrayName)
-
-   count = 0
-   for i in range(numberOfPoints):
-      value = maskArray.GetTuple1(i)
-      if (value == 1):
-         radius = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
-      
-         points.InsertNextPoint(voronoi.GetPoint(i))
-         cellArray.InsertNextCell(1)
-         cellArray.InsertCellPoint(count) 
-         radiusArray.SetTuple1(count, radius)
-         count += 1
-
-   smoothedDiagram.SetPoints(points)
-   smoothedDiagram.SetVerts(cellArray)
-   smoothedDiagram.GetPointData().AddArray(radiusArray)
-
-   return smoothedDiagram
+    return smoothedDiagram
