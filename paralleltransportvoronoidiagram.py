@@ -37,11 +37,7 @@ def ExtractCylindricInterpolationVoronoiDiagram(cellId,pointId,cylinderRadius,vo
 
    numberOfInterpolationPoints = ComputeNumberOfMaskedPoints(maskArray)
 
-   radiusArray = vtk.vtkDoubleArray()
-   radiusArray.SetNumberOfComponents(1)
-   radiusArray.SetNumberOfTuples(numberOfInterpolationPoints)
-   radiusArray.SetName(radiusArrayName)
-   radiusArray.FillComponent(0, 0.0)
+   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfInterpolationPoints)
 
    count = 0
    for i in range(voronoi.GetNumberOfPoints()):
@@ -138,11 +134,7 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
 
     finalNewVoronoiPoints = vtk.vtkPoints()
     cellArray = vtk.vtkCellArray()
-    finalRadiusArray = vtk.vtkDoubleArray()
-    finalRadiusArray.SetNumberOfComponents(1)
-    finalRadiusArray.SetNumberOfTuples(numberOfAddedPoints)
-    finalRadiusArray.SetName(radiusArrayName)
-    finalRadiusArray.FillComponent(0,0.0)
+    finalRadiusArray = get_vtk_array(radiusArrayName, 1, numberOfAddedPoints)
     count = 0
 
     for i in range(numberOfInterpolationPoints):
@@ -279,13 +271,7 @@ def ExtractLine(cellid,centerlines):
 
    linePoints = cell.GetPoints()
 
-   ptnArray = vtk.vtkDoubleArray()
-   ptnArray.SetNumberOfComponents(3)
-   ptnArray.SetNumberOfTuples(numberOfPoints)
-   ptnArray.SetName(parallelTransportNormalsArrayName)
-   ptnArray.FillComponent(0,0.0)
-   ptnArray.FillComponent(1,0.0)
-   ptnArray.FillComponent(2,0.0)
+   ptnArray = get_vtk_array(parallelTransportNormalsArrayName, 3, numberOfPoints)
 
    for i in range(numberOfPoints):
       cellArray.InsertCellPoint(i)   
@@ -376,13 +362,9 @@ def InsertNewVoronoiPoints(oldDataset,newPoints,newArray):
    numberOfNewVoronoiPoints = numberOfDatasetPoints + numberOfNewPoints
 
    newDataset = vtk.vtkPolyData()
-   radiusArray = vtk.vtkDoubleArray()
-   radiusArray.SetNumberOfComponents(1)
-   radiusArray.SetNumberOfTuples(numberOfNewVoronoiPoints)
-   radiusArray.SetName(radiusArrayName) 
-   radiusArray.FillComponent(0,0.0)
    cellArray = vtk.vtkCellArray()  
    points = vtk.vtkPoints()
+   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfNewVoronoiPoints)
 
    for i in range(numberOfDatasetPoints):
       point = [0.0,0.0,0.0]

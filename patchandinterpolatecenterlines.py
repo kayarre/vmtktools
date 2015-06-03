@@ -13,25 +13,20 @@ def CreateParentArteryPatches(parentCenterlines, clipPoints):
    patchedCenterlines = vtk.vtkPolyData()
    patchedCenterlinesPoints = vtk.vtkPoints()
    patchedCenterlinesCellArray = vtk.vtkCellArray()
-   patchedRadiusArray = vtk.vtkDoubleArray()
+   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfPatchedCenterlinesPoints)
 
    clipIds, numberOfPatchedCenterlinesPoints = ExtractPatchesIds(parentCenterlines, clipPoints)
    pnt = []
-
-   radiusArray = vtk.vtkDoubleArray()
-   radiusArray.SetNumberOfComponents(1)
-   radiusArray.SetName(radiusArrayName)
-   radiusArray.SetNumberOfTuples(numberOfPatchedCenterlinesPoints) 
-   radiusArray.FillComponent(0,0.0)
-
+   
    numberOfCommonPatch = clipIds[0]+1
    patchedCenterlinesCellArray.InsertNextCell(numberOfCommonPatch)
 
    count = 0
+   getData = parentCenterlines.GetPointData().GetArray(radiusArrayName).GetTuple1
    for i in range(0, numberOfCommonPatch):
       patchedCenterlinesPoints.InsertNextPoint(parentCenterlines.GetPoint(i))
       patchedCenterlinesCellArray.InsertCellPoint(i)
-      radiusArray.SetTuple1(i, parentCenterlines.GetPointData().GetArray(radiusArrayName).GetTuple1(i))
+      radiusArray.SetTuple1(i, getData(i))
       count+=1 
  
    for j in range(numberOfDaughterPatches):
@@ -47,7 +42,7 @@ def CreateParentArteryPatches(parentCenterlines, clipPoints):
          point = cell.GetPoints().GetPoint(i)
          patchedCenterlinesPoints.InsertNextPoint(point)
          patchedCenterlinesCellArray.InsertCellPoint(count)
-         radiusArray.SetTuple1(count,parentCenterlines.GetPointData().GetArray(radiusArrayName).GetTuple1(cell.GetPointId(i)))
+         radiusArray.SetTuple1(count, getData(cell.GetPointId(i)))
          count+=1
 
    patchedCenterlines.SetPoints(patchedCenterlinesPoints)

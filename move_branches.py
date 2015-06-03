@@ -52,12 +52,7 @@ def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
     maskedVoronoi = vtk.vtkPolyData()
     maskedPoints = vtk.vtkPoints()
     cellArray = vtk.vtkCellArray()
-
-    radiusArray = vtk.vtkDoubleArray()
-    radiusArray.SetNumberOfComponents(1)
-    radiusArray.SetNumberOfTuples(numberOfPoints)
-    radiusArray.SetName(radiusArrayName)
-    radiusArray.FillComponent(0, 0.0)
+    radiusArray = get_vtk_array(radiusArrayName, 1, numberOfPoints) 
 
     count = 0
     for i in range(numberOfPoints):
@@ -89,12 +84,7 @@ def rotate_cl(patch_cl, div_points, rotation_matrix, R):
     centerline = vtk.vtkPolyData()
     centerlinePoints = vtk.vtkPoints()
     centerlineCellArray = vtk.vtkCellArray()
-
-    radiusArray = vtk.vtkDoubleArray()
-    radiusArray.SetName(radiusArrayName)
-    radiusArray.SetNumberOfComponents(1)
-    radiusArray.SetNumberOfTuples(numberOfPoints)
-    radiusArray.FillComponent(0,0.0)
+    radiusArray = get_vtk_array(radiusArrayName, 1 numberOfPoints)
 
     line0 = ExtractSingleLine(patch_cl, 0)
     locator0 = get_locator(line0)

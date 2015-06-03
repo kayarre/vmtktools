@@ -188,12 +188,7 @@ def makeVoronoi(ifile, ofile, recompute=False):
 
 
 def create_vtk_array(values, name, k=1):
-    vtkArray = vtk.vtkDoubleArray()
-    vtkArray.SetNumberOfComponents(k)
-    vtkArray.SetNumberOfTuples(values.shape[0])
-    vtkArray.SetName(name)
-    for i in range(k):
-        vtkArray.FillComponent(i, 0.0)
+    vtkArray = get_vtk_array(name, k, values.shape[0])
 
     if k == 1:
         for i in range(values.shape[0]):
@@ -288,34 +283,18 @@ def data_to_vtkPolyData(data, header, TNB=None, PT=None):
 
     info_array = []
     for i in range(3, data.shape[1]):
-        radiusArray = vtk.vtkDoubleArray()
-        radiusArray.SetNumberOfComponents(1)
-        radiusArray.SetNumberOfTuples(data.shape[0])
-        radiusArray.SetName(header[i])
-        radiusArray.FillComponent(0, 0.0)
+        radiusArray = get_vtk_array(header[i], 1, data.shape[0])
         info_array.append(radiusArray)
 
     if TNB is not None:
         for i in range(3):
-            radiusArray = vtk.vtkDoubleArray()
-            radiusArray.SetNumberOfComponents(3)
-            radiusArray.SetNumberOfTuples(data.shape[0])
-            radiusArray.SetName(header[i+data.shape[1]])
-            radiusArray.FillComponent(0, 0.0)
-            radiusArray.FillComponent(1, 0.0)
-            radiusArray.FillComponent(2, 0.0)
+            radiusArray = get_vtk_array(header[i+data.shape[1]], 3, data.shape[0])
             info_array.append(radiusArray)
 
     if PT is not None:
         start = data.shape[1] if TNB is None else data.shape[1] + 3
         for i in range(2):
-            radiusArray = vtk.vtkDoubleArray()
-            radiusArray.SetNumberOfComponents(3)
-            radiusArray.SetNumberOfTuples(PT[0].shape[0])
-            radiusArray.SetName(header[i+start])
-            radiusArray.FillComponent(0, 0.0)
-            radiusArray.FillComponent(1, 0.0)
-            radiusArray.FillComponent(2, 0.0)
+            radiusArray = get_vtk_array(header[i+start]), 3, PT[0].shape[0])
             info_array.append(radiusArray)
 
     for i in range(data.shape[0]):
@@ -371,15 +350,9 @@ def ExtractSingleLine(centerlines, id, startID=0, endID=None):
     arrays = []
     N_, names = get_number_of_arrays(centerlines)
     for i in range(N_):
-        radiusArray = vtk.vtkDoubleArray()
         tmp = centerlines.GetPointData().GetArray(names[i])
         tmp_comp = tmp.GetNumberOfComponents()
-        radiusArray.SetNumberOfComponents(tmp_comp)
-        radiusArray.SetNumberOfTuples(N - startID)
-        radiusArray.SetName(names[i])
-        for j in range(tmp_comp):
-            radiusArray.FillComponent(j, 0.0)
-
+        radiusArray = get_vtk_array(names[i], tmp_comp, N - startID)
         arrays.append(radiusArray)
 
     getArray = []

@@ -92,12 +92,7 @@ def ExtractMaskedVoronoiPoints(voronoi,maskArray):
    maskedVoronoi = vtk.vtkPolyData()
    maskedPoints = vtk.vtkPoints()
    cellArray = vtk.vtkCellArray()
-
-   radiusArray = vtk.vtkDoubleArray()
-   radiusArray.SetNumberOfComponents(1)
-   radiusArray.SetNumberOfTuples(numberOfPoints)
-   radiusArray.SetName(radiusArrayName)
-   radiusArray.FillComponent(0, 0.0)
+   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfPoints)
 
    count = 0
    for i in range(voronoi.GetNumberOfPoints()):
