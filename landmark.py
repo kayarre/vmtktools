@@ -70,9 +70,7 @@ def splineCenterline(line):
     min_point_ids = list(argrelextrema(curvature_, np.less)[0])
 
     # TODO: Replace the locator with curv_coor = length
-    locator = vtk.vtkPointLocator()
-    locator.SetDataSet(line)
-    locator.BuildLocator()
+    locator = get_locator(line)
 
     min_points = [[fx_[i], fy_[i], fz_[i]] for i in min_point_ids]
     max_points = [[fx_[i], fy_[i], fz_[i]] for i in max_point_ids]

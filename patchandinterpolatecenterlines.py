@@ -68,9 +68,7 @@ def ExtractPatchesIds(parentCl, clipPts):
     for j in range(parentCl.GetNumberOfCells()):
         cellLine = ExtractSingleLine(parentCl, j)
 
-        locator = vtk.vtkPointLocator()
-        locator.SetDataSet(cellLine)
-        locator.BuildLocator()
+        locator = get_locator(cellLine)
 
         if j==0:
             upstreamId = locator.FindClosestPoint(commonPoint)

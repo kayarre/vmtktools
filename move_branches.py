@@ -19,9 +19,7 @@ def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
     not_rotate = [0]
     for i in range(patch_cl.GetNumberOfCells()):
         cellLine.append(ExtractSingleLine(patch_cl, i))
-        tmp_locator = vtk.vtkPointLocator()
-        tmp_locator.SetDataSet(cellLine[-1])
-        tmp_locator.BuildLocator()
+        tmp_locator = get_locator(cellLine[-1])
         locator.append(tmp_locator)
 
     for i in range(1, patch_cl.GetNumberOfCells()):
@@ -99,9 +97,7 @@ def rotate_cl(patch_cl, div_points, rotation_matrix, R):
     radiusArray.FillComponent(0,0.0)
 
     line0 = ExtractSingleLine(patch_cl, 0)
-    locator0 = vtk.vtkPointLocator()
-    locator0.SetDataSet(line0)
-    locator0.BuildLocator()
+    locator0 = get_locator(line0)
 
     count = 0
     for i in range(patch_cl.GetNumberOfCells()):
@@ -117,9 +113,7 @@ def rotate_cl(patch_cl, div_points, rotation_matrix, R):
         if test:
             cellLine = ExtractSingleLine(patch_cl, i)
 
-            locator = vtk.vtkPointLocator()
-            locator.SetDataSet(cellLine)
-            locator.BuildLocator()
+            locator = get_locator(cellLine)
 
             pnt1 = cellLine.GetPoints().GetPoint(locator.FindClosestPoint(div_points[1]))
             pnt2 = cellLine.GetPoints().GetPoint(locator.FindClosestPoint(div_points[2]))

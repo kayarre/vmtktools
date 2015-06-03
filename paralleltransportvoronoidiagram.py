@@ -149,9 +149,7 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        voronoiPoint = voronoiDataset0.GetPoint(i)
        voronoiPointRadius = voronoiDataset0.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
 
-       centerlinePointLocator = vtk.vtkPointLocator()
-       centerlinePointLocator.SetDataSet(cellLine)
-       centerlinePointLocator.BuildLocator()
+       centerlinePointLocator = get_locator(cellLine)
 
        closestPointId = centerlinePointLocator.FindClosestPoint(voronoiPoint)
        closestPoint = cellLine.GetPoint(closestPointId)
@@ -209,18 +207,15 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
 
        numberOfPTPoints = PTPoints.GetNumberOfPoints() 
        lastPTPoint = PTPoints.GetPoint(PTPoints.GetNumberOfPoints()-1)
-       
-       voronoiPointLocator = vtk.vtkPointLocator()
-       voronoiPointLocator.SetDataSet(voronoiDataset1)
-       voronoiPointLocator.BuildLocator()
+      
+
+       voronoiPointLocator = get_locator(voronoiDataset1)
        
        arrivalVoronoiPointId = voronoiPointLocator.FindClosestPoint(lastPTPoint)
        arrivalVoronoiPoint = voronoiDataset1.GetPoint(arrivalVoronoiPointId)
        arrivalVoronoiPointRadius = voronoiDataset1.GetPointData().GetArray(radiusArrayName).GetTuple1(arrivalVoronoiPointId)
        
-       arrivalCenterlinePointLocator = vtk.vtkPointLocator()
-       arrivalCenterlinePointLocator.SetDataSet(cellLine)
-       arrivalCenterlinePointLocator.BuildLocator()
+       arrivalCenterlinePointLocator get_locator(cellLine)
       
        arrivalCenterlineClosestPointId = arrivalCenterlinePointLocator.FindClosestPoint(arrivalVoronoiPoint) 
        arrivalCenterlineClosestPoint = cellLine.GetPoint(arrivalCenterlineClosestPointId)

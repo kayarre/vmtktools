@@ -51,9 +51,7 @@ def getData(centerline, centerline_bif, tol):
     # Find the diverging point for anterior and midt bifurcation
     # continue further downstream in each direction and stop when
     # a point is closer than tol, than move point MISR * X
-    locator = vtk.vtkPointLocator()
-    locator.SetDataSet(centerline_bif)
-    locator.BuildLocator()
+    locator = get_locator(centerline_bif)
 
     counter = 0
     for point_ids in [points_ids_0, points_ids_1]:

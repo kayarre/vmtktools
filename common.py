@@ -56,6 +56,13 @@ def get_array(arrayName, line, k=1):
     return array
 
 
+def get_locator(centerline):
+    locator = vtk.vtkPointLocator()
+    locator.SetDataSet(centerline)
+    locator.BuildLocator()
+    return locator
+
+
 def success(text):
     if not "error: " in text.lower():
         return True, ""
