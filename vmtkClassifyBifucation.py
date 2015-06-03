@@ -6,10 +6,7 @@ import numpy as np
 from os import path, listdir
 
 
-def getData(centerline, centerline_bif, toll):
-    # For speed up, create local function
-    distance = vtk.vtkMath.Distance2BetweenPoints
-
+def getData(centerline, centerline_bif, tol):
     # Declear variables before loop incase values are not found
     diverging_point_ID = -1
     diverging_point = [0.0, 0.0, 0.0]
@@ -34,7 +31,7 @@ def getData(centerline, centerline_bif, toll):
         cell_point_1 = centerline.GetPoint(points_ids_1.GetId(i))
         
         distance_between_points = math.sqrt(distance(cell_point_0, cell_point_1))
-        if distance_between_points > toll:
+        if distance_between_points > tol:
             tmpI = i
             point_ID_0 = points_ids_0.GetId(i)
             point_ID_1 = points_ids_1.GetId(i)
@@ -53,7 +50,7 @@ def getData(centerline, centerline_bif, toll):
 
     # Find the diverging point for anterior and midt bifurcation
     # continue further downstream in each direction and stop when
-    # a point is closer than toll, than move point MISR * X
+    # a point is closer than tol, than move point MISR * X
     locator = vtk.vtkPointLocator()
     locator.SetDataSet(centerline_bif)
     locator.BuildLocator()
@@ -65,7 +62,7 @@ def getData(centerline, centerline_bif, toll):
             closest_point_ID = locator.FindClosestPoint(tmp_point)
             closest_point = centerline_bif.GetPoint(closest_point_ID)
             distance_between_points = distance(tmp_point, closest_point)
-            if distance_between_points < toll:
+            if distance_between_points < tol:
                 point_ID = point_ids.GetId(i)
                 center = centerline.GetPoint(point_ID)
                 r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)

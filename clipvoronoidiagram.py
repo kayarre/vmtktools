@@ -183,11 +183,3 @@ def SmoothClippedVoronoiDiagram(voronoi, centerlines, smoothingFactor):
    smoothedDiagram.GetPointData().AddArray(radiusArray)
 
    return smoothedDiagram
-
-
-#SOME COMMON VMTK DATA ARRAY NAMES
-smoothVoronoiDiagram = 1	# recommended; perform smoothing of the Voronoi Diagram to 
-
-if __name__ == "__main__":
-    if (smoothVoronoiDiagram==1):
-        smoothVoronoiDiagram = SmoothClippedVoronoiDiagram(clippedVoronoiDiagram,patchCenterlines, 0.25)

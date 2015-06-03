@@ -433,11 +433,6 @@ def create_new_surface(completeVoronoiDiagram):
     return envelope
 
 
-#OPTIONS TO SET
-interpolationHalfSize = 3
-polyBallImageSize = [200, 200, 200] # 200   #size of the image for the evaluation of the polyball function
-
-
 def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines, 
                                 clippedVoronoi, clippingPoints):
     # Copy the voronoi diagram

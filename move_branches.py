@@ -8,13 +8,6 @@ from subprocess import STDOUT, check_output
 import sys
 
 
-def success(text):
-    if "Writing VTK XML surface file." in text:
-        return True
-    else:
-        return False
-
-
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
     numberOfPoints = clipped_voronoi.GetNumberOfPoints()
     distance = vtk.vtkMath.Distance2BetweenPoints
@@ -168,11 +161,11 @@ def rotationMatrix(data):
         vec[:,i] = tmp / len
 
     R = GramSchmidt(vec)
-    m1 = np.asarray([[np.cos(np.pi / 6), -np.sin(np.pi / 6), 0],
-                     [np.sin(np.pi / 6),  np.cos(np.pi / 6), 0],
+    m1 = np.asarray([[np.cos(np.pi / 8), -np.sin(np.pi / 8), 0],
+                     [np.sin(np.pi / 8),  np.cos(np.pi / 8), 0],
                      [0, 0, 1]])
-    m2 = np.asarray([[ np.cos(np.pi / 6), np.sin(np.pi / 6), 0],
-                     [-np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
+    m2 = np.asarray([[ np.cos(np.pi / 8), np.sin(np.pi / 8), 0],
+                     [-np.sin(np.pi / 8), np.cos(np.pi / 8), 0],
                      [0, 0, 1]])
 
     m = {1: m1, 2: m2}
@@ -213,15 +206,8 @@ def main(dirpath, smooth=1, dir_out_path=None):
         sys.exit(0)
 
     # Voronoi
-    if not path.exists(voronoi_path):
-        print "Compute voronoi diagram"
-        a = check_output(("vmtk vmtkdelaunayvoronoi -ifile %s -removesubresolution 1 " + \
-                  "-voronoidiagramfile %s") % (model_path, voronoi_path),
-                  stderr=STDOUT, shell=True)
-        if not success(a):
-            print "Something went wront when computing voronoi diagram!"
-            print a
-            sys.exit(0)
+    print "Compute voronoi diagram"
+    voronoi = makeVoronoi(model_path, voronoi_path)
 
     # Centerline
     if not path.exists(centerline_path):
@@ -315,4 +301,4 @@ def main(dirpath, smooth=1, dir_out_path=None):
 
 
 if  __name__ == "__main__": 
-    main("C0013")
+    main("C0001")
