@@ -8,6 +8,30 @@ from subprocess import STDOUT, check_output
 import sys
 
 
+def read_command_line():
+    """Read arguments from commandline"""
+    parser = ArgumentParser()
+
+
+    parser.add_argument('--s', '--smooth', type=bool, default=False,
+                        help="If the original voronoi diagram (surface) should be" + \ 
+                        "smoothed before it is manipulated", metavar="smooth") 
+    parser.add_argument('--a', '--angle', type=str, default="pi/6.",
+                        help="Each daughter branch is rotated an angle a in the" + \
+                        " bifurcation plant. a should be expressed in radians as" + \
+                        " any math expression from the" + \
+                        " math module in python", metavar="rotation_angle")
+    parser.add_argument('--smooth_factor', type=float, default=0.25,
+                         help="If smooth option is true then each voronoi point" + \
+                         " that has a radius less then MISR*(1-smooth_factor) at" + \
+                         " the closest centerline point is removes",
+                         metavar="smoothening_factor")
+
+    args = parser.parse_args()
+
+    return args.s, args.a, args.smooth_factor
+
+
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
     numberOfPoints = clipped_voronoi.GetNumberOfPoints()
     distance = vtk.vtkMath.Distance2BetweenPoints
@@ -167,21 +191,21 @@ def get_startpoint(centerline):
     return line.GetPoints().GetPoint(0)
 
 
-def main(dirpath, smooth=1, dir_out_path=None):
+def main(dirpath, smooth, smooth_factor, angle):
     # Input filenames
     model_path = path.join(dirpath, "surface", "model.vtp")
 
     # Output names
     dirpath = dirpath if dir_out_path is None else dir_out_path
-    centerline_bif_path = path.join(dirpath, "surface", "cl_bif.vtp")
-    centerline_path = path.join(dirpath, "surface", "cl.vtp")
-    centerline_new_path = path.join(dirpath, "surface", "cl_new.vtp")
-    centerline_clipped_path = path.join(dirpath, "surface", "cl_patch.vtp")
-    centerline_rotated_path = path.join(dirpath, "surface", "cl_rotated.vtp")
+    centerline_path = path.join(dirpath, "surface", "centerline_for_rotating.vtp")
+    centerline_bif_path = path.join(dirpath, "surface", "centerline_bifurcation.vtp")
+    centerline_new_path = path.join(dirpath, "surface", "centerline_new.vtp")
+    centerline_clipped_path = path.join(dirpath, "surface", "centerline_patch.vtp")
+    centerline_rotated_path = path.join(dirpath, "surface", "centerline_rotated.vtp")
     voronoi_path = path.join(dirpath, "surface", "voronoi.vtp")
     voronoi_clipped_path = path.join(dirpath, "surface", "voronoi_clipped.vtp")
     voronoi_rotated_path = path.join(dirpath, "surface", "voronoi_rotated.vtp")
-    voronoi_new_surface = path.join(dirpath, "surface", "model_new.vtp")
+    voronoi_new_surface = path.join(dirpath, "surface", "model_angle.vtp")
 
     # Check if data already exsists, if not it is created
     # Model
@@ -194,43 +218,15 @@ def main(dirpath, smooth=1, dir_out_path=None):
     voronoi = makeVoronoi(model_path, voronoi_path)
 
     # Centerline
-    if not path.exists(centerline_path):
-        print "Compute centerlines"
-        print "The program need a centerline that goes from the inlet to one \nthe outlet at" + \
-              "inter part and one outlet at the anterior part. \nPleace select" + \
-              "the inlet as source point and the two oters as outlets. \nPress any key when" + \
-              " you want to continue."
-        raw_input()
-        a = check_output(("vmtk vmtkcenterlines -ifile %s --pipe " + \
-                          "vmtkcenterlineresampling -length 0.1 -ofile %s") %
-                          (model_path, centerline_path), stderr=STDOUT, shell=True)
-        if not success(a):
-            print "Something went wrong when computing the centerline"
-            print a
-            sys.exit(0)
-
-    # Centerline bif
-    if not path.exists(centerline_bif_path):
-        points = get_endpoints(centerline_path)
-        a = check_output(("vmtk vmtkcenterlines -ifile %s -seedselector "
-                          "pointlist -sourcepoints %s %s %s -targetpoints %s %s %s" + \
-                          " --pipe vmtkcenterlineresampling -length 0.1 -ofile %s") % 
-                          (model_path, points[0][0], points[0][1], points[0][2], 
-                           points[1][0], points[1][1], points[1][2], centerline_bif_path), 
-                          stderr=STDOUT, shell=True)
-        if not success(a):
-            print "Something went wrong when computing the centerline"
-            print a
-            sys.exit(0)
+    centerline = makseCenterline(modle_path, centerline_path, length=0.1, smooth=False)
+    centerline_bif = makeCenterline(model_path, centerline_bif_path, outlets=[0,1],
+                                    length=0.1, smooth=False)
 
     # Read data
     voronoi = ReadPolyData(voronoi_path)
     centerline = ReadPolyData(centerline_path)
     centerline_bif = ReadPolyData(centerline_bif_path)
 
-    # TODO: Read options from commandline
-    # TODO: Smooth option
-    # TODO: Optional dirpath
     # TODO: Control the curvature in the bifurcation
 
     # Create a tolerance for diverging
@@ -250,18 +246,24 @@ def main(dirpath, smooth=1, dir_out_path=None):
     div_points.append(get_startpoint(centerline))
 
     # Clipp the centerline
-    print "Clipping centerlines and voronoi diagram."
-    patch_cl = CreateParentArteryPatches(centerline, clippingPoints)
-    WritePolyData(patch_cl, centerline_clipped_path)
+    if not path.exists(centerline_clipped_path):
+        print "Clipping centerlines and voronoi diagram."
+        patch_cl = CreateParentArteryPatches(centerline, clippingPoints)
+        WritePolyData(patch_cl, centerline_clipped_path)
+    else:
+        patch_cl = ReadPolyData(centerline_clipped_path)
     
     # Clipp the voronoi diagram
-    masked_voronoi = MaskVoronoiDiagram(voronoi, patch_cl)
-    voronoi_clipped = ExtractMaskedVoronoiPoints(voronoi, masked_voronoi)
-    WritePolyData(voronoi_clipped, voronoi_clipped_path)
+    if not path.exists(masked_voronoi):
+        masked_voronoi = MaskVoronoiDiagram(voronoi, patch_cl)
+        voronoi_clipped = ExtractMaskedVoronoiPoints(voronoi, masked_voronoi)
+        WritePolyData(voronoi_clipped, voronoi_clipped_path)
+    else:
+        voronoi_clipped = ReadPolyData(voronoi_clipped_path)
 
     # Rotate branches (Both centerline and voronoi)
     print "Rotate centerlines and voronoi diagram."
-    R, m = rotationMatrix(data)
+    R, m = rotationMatrix(data, angle)
     
     rotated_cl = rotate_cl(patch_cl, div_points, m, R)
     WritePolyData(rotated_cl, centerline_rotated_path)
@@ -284,5 +286,9 @@ def main(dirpath, smooth=1, dir_out_path=None):
     WritePolyData(new_surface, voronoi_new_surface)
 
 
-if  __name__ == "__main__": 
-    main("C0001")
+if  __name__ == "__main__":
+    smooth, angle, smooth_factor = read_command_line()
+    basedir = "."
+    for folder in listdir(basedir):
+        if folder[:2] in ["P0", "C0"]:
+            main(path.join(basedir, folder), smooth, smooth_factor, angle)

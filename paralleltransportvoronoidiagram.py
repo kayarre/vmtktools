@@ -8,89 +8,82 @@ from vmtk import vtkvmtk
 
 
 def ExtractCylindricInterpolationVoronoiDiagram(cellId,pointId,cylinderRadius,voronoi,centerlines):
-   isInside = 0
+    isInside = 0
 
-   if (cellId == 0):
-      cylinderTop = centerlines.GetPoint(pointId) 
-      cylinderCenter = centerlines.GetPoint(pointId-interpolationHalfSize)
-      cylinderBottom = centerlines.GetPoint(pointId-interpolationHalfSize*2) 
-   else:
-      cylinderTop = centerlines.GetPoint(pointId) 
-      cylinderCenter = centerlines.GetPoint(pointId+interpolationHalfSize)
-      cylinderBottom = centerlines.GetPoint(pointId+interpolationHalfSize*2) 
+    if (cellId == 0):
+        cylinderTop = centerlines.GetPoint(pointId) 
+        cylinderCenter = centerlines.GetPoint(pointId - interpolationHalfSize)
+        cylinderBottom = centerlines.GetPoint(pointId - 2*interpolationHalfSize) 
+    else:
+        cylinderTop = centerlines.GetPoint(pointId) 
+        cylinderCenter = centerlines.GetPoint(pointId + interpolationHalfSize)
+        cylinderBottom = centerlines.GetPoint(pointId + 2*interpolationHalfSize) 
 
-   interpolationDataset = vtk.vtkPolyData()
-   interpolationDatasetPoints = vtk.vtkPoints()
-   interpolationDatasetCellArray = vtk.vtkCellArray()
-          
-   maskArray = vtk.vtkIntArray()
-   maskArray.SetNumberOfComponents(1)
-   maskArray.SetNumberOfTuples(voronoi.GetNumberOfPoints())
-   maskArray.FillComponent(0,0)
+    interpolationDataset = vtk.vtkPolyData()
+    interpolationDatasetPoints = vtk.vtkPoints()
+    interpolationDatasetCellArray = vtk.vtkCellArray()
 
-   for i in range(voronoi.GetNumberOfPoints()):
-      point = voronoi.GetPoint(i)
-      isInside = IsPointInsideInterpolationCylinder(point, cylinderTop, cylinderCenter, cylinderBottom, cylinderRadius)
+    maskArray = vtk.vtkIntArray()
+    maskArray.SetNumberOfComponents(1)
+    maskArray.SetNumberOfTuples(voronoi.GetNumberOfPoints())
+    maskArray.FillComponent(0,0)
 
-      if (isInside == 1):
-         maskArray.SetTuple1(i, 1)
+    for i in range(voronoi.GetNumberOfPoints()):
+        point = voronoi.GetPoint(i)
+        isInside = IsPointInsideInterpolationCylinder(point, cylinderTop, cylinderCenter, cylinderBottom, cylinderRadius)
 
-   numberOfInterpolationPoints = ComputeNumberOfMaskedPoints(maskArray)
+        if (isInside == 1):
+            maskArray.SetTuple1(i, 1)
 
-   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfInterpolationPoints)
+    numberOfInterpolationPoints = ComputeNumberOfMaskedPoints(maskArray)
 
-   count = 0
-   for i in range(voronoi.GetNumberOfPoints()):
-      value = maskArray.GetTuple1(i)
-      if (value == 1):
-         interpolationDatasetPoints.InsertNextPoint(voronoi.GetPoint(i))
-         interpolationDatasetCellArray.InsertNextCell(1)
-         interpolationDatasetCellArray.InsertCellPoint(count)
-         radius = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
-         radiusArray.SetTuple1(count,radius)
-         count +=1
+    radiusArray = get_vtk_array(radiusArrayName, 1, numberOfInterpolationPoints)
 
-   interpolationDataset.SetPoints(interpolationDatasetPoints)
-   interpolationDataset.SetVerts(interpolationDatasetCellArray)
-   interpolationDataset.GetPointData().AddArray(radiusArray)
+    count = 0
+    for i in range(voronoi.GetNumberOfPoints()):
+        value = maskArray.GetTuple1(i)
+        if (value == 1):
+            interpolationDatasetPoints.InsertNextPoint(voronoi.GetPoint(i))
+            interpolationDatasetCellArray.InsertNextCell(1)
+            interpolationDatasetCellArray.InsertCellPoint(count)
+            radius = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
+            radiusArray.SetTuple1(count,radius)
+            count +=1
 
-   return interpolationDataset
+    interpolationDataset.SetPoints(interpolationDatasetPoints)
+    interpolationDataset.SetVerts(interpolationDatasetCellArray)
+    interpolationDataset.GetPointData().AddArray(radiusArray)
 
-def IsPointInsideInterpolationCylinder(x,t,c,b,r):
-  halfheigth = math.sqrt(vtk.vtkMath.Distance2BetweenPoints(b,t))/2.0
+    return interpolationDataset
 
-  xc = [0.0, 0.0, 0.0]
-  tb = [0.0, 0.0, 0.0]
 
-  xc[0] = x[0] - c[0]
-  xc[1] = x[1] - c[1]
-  xc[2] = x[2] - c[2]
+def IsPointInsideInterpolationCylinder(x, t, c, b, r):
+    halfheigth = math.sqrt(vtk.vtkMath.Distance2BetweenPoints(b, t)) / 2.0
 
-  tb[0] = t[0] - b[0]
-  tb[1] = t[1] - b[1]
-  tb[2] = t[2] - b[2]
+    xc = [x[i] - c[i] for i in range(len(x))]
+    tb = [t[i] - b[i] for i in range(len(t))]
 
-  xcnorm = vtk.vtkMath.Norm(xc)
-  vtk.vtkMath.Normalize(xc)  
-  vtk.vtkMath.Normalize(tb)  
+    xcnorm = vtk.vtkMath.Norm(xc)
+    vtk.vtkMath.Normalize(xc)  
+    vtk.vtkMath.Normalize(tb)  
 
-  alpha = math.acos(vtk.vtkMath.Dot(xc, tb))
+    alpha = math.acos(vtk.vtkMath.Dot(xc, tb))
 
-  parallelxc = xcnorm * math.cos(alpha) 
-  perpendicularxc = xcnorm * math.sin(alpha)
+    parallelxc = xcnorm * math.cos(alpha) 
+    perpendicularxc = xcnorm * math.sin(alpha)
 
-  thetamin = math.atan(r / halfheigth)
-  thetamax = thetamin + (math.pi - 2*thetamin)
+    thetamin = math.atan(r / halfheigth)
+    thetamax = thetamin + (math.pi - 2*thetamin)
 
-  inside = 0
-  if (thetamin <= alpha <= thetamax):
-    if (abs(perpendicularxc)<=r):
-        inside = 1
-  else:
-    if (abs(parallelxc)<=halfheigth):
-        inside = 1
+    inside = 0
+    if (thetamin <= alpha <= thetamax):
+        if (abs(perpendicularxc)<=r):
+            inside = 1
+    else:
+        if (abs(parallelxc)<=halfheigth):
+            inside = 1
 
-  return inside   
+    return inside   
 
 
 def ComputeNumberOfMaskedPoints(dataArray):
@@ -104,8 +97,7 @@ def ComputeNumberOfMaskedPoints(dataArray):
 def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0, 
                                 voronoiDataset1, centerlines, direction,
                                 clippingPoints):
-    #print 'Interpolating cells ', id0, id1
-    cellLine = ExtractLine(interpolationcellid, centerlines)
+    cellLine = ExtractSingleLine(interpolationcellid, centerlines)
 
     startPoint = clippingPoints.GetPoint(id0)
     endPoint = clippingPoints.GetPoint(id1)
@@ -130,7 +122,6 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
     numberOfInterpolationPoints = voronoiDataset0.GetNumberOfPoints()
     numberOfCenterlinesPoints = cellLine.GetNumberOfPoints()
     numberOfAddedPoints = numberOfGapPoints*numberOfInterpolationPoints
-    #print 'from id ',gapStartId,'to id ',gapEndId,'; number of points added ',numberOfAddedPoints
 
     finalNewVoronoiPoints = vtk.vtkPoints()
     cellArray = vtk.vtkCellArray()
@@ -166,13 +157,13 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
           point0 = [0.0,0.0,0.0]
           point0 = cellLine.GetPoint(j)
 
-          if (j<numberOfCenterlinesPoints-1):
+          if (j < numberOfCenterlinesPoints - 1):
              point1 = [0.0,0.0,0.0]
              cellLine.GetPoint(j+1,point1)   
              localtangent[0] += point1[0] - point0[0]  
              localtangent[1] += point1[1] - point0[1]  
              localtangent[2] += point1[2] - point0[2]  
-          if (j>0):
+          if (j > 0):
              point2 = [0.0,0.0,0.0]
              cellLine.GetPoint(j-1,point2) 
              localtangent[0] += point0[0] - point2[0]
@@ -207,7 +198,7 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        arrivalVoronoiPoint = voronoiDataset1.GetPoint(arrivalVoronoiPointId)
        arrivalVoronoiPointRadius = voronoiDataset1.GetPointData().GetArray(radiusArrayName).GetTuple1(arrivalVoronoiPointId)
        
-       arrivalCenterlinePointLocator get_locator(cellLine)
+       arrivalCenterlinePointLocator = get_locator(cellLine)
       
        arrivalCenterlineClosestPointId = arrivalCenterlinePointLocator.FindClosestPoint(arrivalVoronoiPoint) 
        arrivalCenterlineClosestPoint = cellLine.GetPoint(arrivalCenterlineClosestPointId)
@@ -259,57 +250,26 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
     return finalNewVoronoiPoints, finalRadiusArray
 
 
-def ExtractLine(cellid,centerlines):
-   cell = vtk.vtkGenericCell()
-   centerlines.GetCell(cellid,cell)
-
-   numberOfPoints = cell.GetNumberOfPoints()
-
-   line = vtk.vtkPolyData()
-   cellArray = vtk.vtkCellArray()
-   cellArray.InsertNextCell(numberOfPoints)
-
-   linePoints = cell.GetPoints()
-
-   ptnArray = get_vtk_array(parallelTransportNormalsArrayName, 3, numberOfPoints)
-
-   for i in range(numberOfPoints):
-      cellArray.InsertCellPoint(i)   
-      normal = centerlines.GetPointData().GetArray(parallelTransportNormalsArrayName).GetTuple3(cell.GetPointId(i))
-      ptnArray.SetTuple3(i,normal[0],normal[1],normal[2])
-       
-   line.SetPoints(linePoints)
-   line.SetLines(cellArray) 
-   line.GetPointData().AddArray(ptnArray)
-   return line
-
-
-def ComputeVoronoiVectorToCenterlineAngle(pointId,vector,centerline):
-    point0 = [0.0,0.0,0.0]
-    point1 = [0.0,0.0,0.0]
-    point2 = [0.0,0.0,0.0]
-    centerline.GetPoint(pointId,point0)
-    centerline.GetPoint(pointId+1,point1)
-    centerline.GetPoint(pointId-1,point2)
+def ComputeVoronoiVectorToCenterlineAngle(pointId, vector, centerline):
+    point0 = centerline.GetPoint(pointId)
+    point1 = centerline.GetPoint(pointId + 1)
+    point2 = centerline.GetPoint(pointId - 1)
 
     tangent = [0.0,0.0,0.0]
-    tangent[0] += point1[0]-point0[0]
-    tangent[1] += point1[1]-point0[1]
-    tangent[2] += point1[2]-point0[2]
-    tangent[0] += point0[0]-point2[0]
-    tangent[1] += point0[1]-point2[1]
-    tangent[2] += point0[2]-point2[2]
+    for i in range(3):
+        tangent[i] += point1[i]-point0[i]
+        tangent[i] += point0[i]-point2[i]
 
     ptnnormal = centerline.GetPointData().GetArray(parallelTransportNormalsArrayName).GetTuple3(pointId)
-
     alpha = ComputeAngleBetweenVectors(ptnnormal,tangent,vector)
+
     return alpha
 
 
-def ComputeAngleBetweenVectors(normal,tangent,vector):
+def ComputeAngleBetweenVectors(normal, tangent, vector):
     #compute the tangent component orthogonal to normal 
     otangent = [0.0,0.0,0.0]
-    normalDot = vtk.vtkMath.Dot(tangent,normal)
+    normalDot = vtk.vtkMath.Dot(tangent, normal)
     otangent[0] = tangent[0] - normalDot*normal[0]
     otangent[1] = tangent[1] - normalDot*normal[1]
     otangent[2] = tangent[2] - normalDot*normal[2]
@@ -324,20 +284,24 @@ def ComputeAngleBetweenVectors(normal,tangent,vector):
     ovector[2] = vector[2] - vectorDot*otangent[2]
     vtk.vtkMath.Normalize(ovector)
  
-    theta = vtkvmtk.vtkvmtkMath.AngleBetweenNormals(normal,ovector)
+    theta = vtkvmtk.vtkvmtkMath.AngleBetweenNormals(normal, ovector)
     theta = vtk.vtkMath.DegreesFromRadians(theta)
    
     cross = [0.0,0.0,0.0]
-    vtk.vtkMath.Cross(ovector,normal,cross)
-    tangentDot = vtk.vtkMath.Dot(otangent,cross)
-    if (tangentDot<0.0): theta = -1.0*theta
+    vtk.vtkMath.Cross(ovector, normal, cross)
+    tangentDot = vtk.vtkMath.Dot(otangent, cross)
+
+    if (tangentDot < 0.0): 
+        theta = -1.0*theta
+    
     angle = -theta
+    
     return angle 
 
 
-def ComputeSpline(startValue,endValue,numberOfPoints):
-   averageValue = (startValue + endValue)/2.0
-   averageId = int(numberOfPoints/2) 
+def ComputeSpline(startValue, endValue, numberOfPoints):
+   averageValue = (startValue + endValue) / 2.0
+   averageId = int(numberOfPoints / 2) 
 
    splineArray = vtk.vtkDoubleArray()
    splineArray.SetNumberOfComponents(1)
@@ -345,9 +309,9 @@ def ComputeSpline(startValue,endValue,numberOfPoints):
    splineArray.FillComponent(0,0.0)
 
    spline = vtk.vtkCardinalSpline()
-   spline.AddPoint(float(0),startValue)
-   spline.AddPoint(float(averageId),averageValue)
-   spline.AddPoint(float(numberOfPoints),endValue)
+   spline.AddPoint(float(0), startValue)
+   spline.AddPoint(float(averageId), averageValue)
+   spline.AddPoint(float(numberOfPoints), endValue)
    spline.Compute()   
 
    for i in range(numberOfPoints):
@@ -389,6 +353,7 @@ def InsertNewVoronoiPoints(oldDataset,newPoints,newArray):
    newDataset.SetPoints(points)
    newDataset.SetVerts(cellArray)
    newDataset.GetPointData().AddArray(radiusArray)
+
    return newDataset
 
 

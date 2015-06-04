@@ -56,7 +56,7 @@ def get_array(arrayName, line, k=1):
     return array
 
 
-def get_vtk_array(name, comp, num)
+def get_vtk_array(name, comp, num):
     array = vtk.vtkDoubleArray()
     array.SetNumberOfComponents(comp)
     array.SetNumberOfTuples(num)
@@ -294,7 +294,7 @@ def data_to_vtkPolyData(data, header, TNB=None, PT=None):
     if PT is not None:
         start = data.shape[1] if TNB is None else data.shape[1] + 3
         for i in range(2):
-            radiusArray = get_vtk_array(header[i+start]), 3, PT[0].shape[0])
+            radiusArray = get_vtk_array(header[i+start], 3, PT[0].shape[0])
             info_array.append(radiusArray)
 
     for i in range(data.shape[0]):

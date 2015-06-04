@@ -122,7 +122,7 @@ def SmoothClippedVoronoiDiagram(voronoi, centerlines, smoothingFactor):
     smoothedDiagram = vtk.vtkPolyData()
     points = vtk.vtkPoints()
     cellArray = vtk.vtkCellArray()
-    radiusArrayNumpy = zeros(numberOfPoints)
+    radiusArrayNumpy = np.zeros(numberOfPoints)
 
     count = 0
     for i in range(numberOfPoints):
@@ -133,13 +133,13 @@ def SmoothClippedVoronoiDiagram(voronoi, centerlines, smoothingFactor):
             points.InsertNextPoint(point)
             cellArray.InsertNextCell(1)
             cellArray.InsertCellPoint(count)
-            radiusArrayNumy[count] = radius
+            radiusArrayNumpy[count] = radius
             count += 1
 
     radiusArray = get_vtk_array(radiusArrayName, 1, count)
     
     for i in range(count):
-        radiusArrayName.SetTuple1(i, radius[i])
+        radiusArray.SetTuple1(i, radiusArrayNumpy[i])
 
     smoothedDiagram.SetPoints(points)
     smoothedDiagram.SetVerts(cellArray)
