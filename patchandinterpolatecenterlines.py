@@ -8,48 +8,50 @@ from vmtk import vtkvmtk
 
 
 def CreateParentArteryPatches(parentCenterlines, clipPoints):
-   numberOfDaughterPatches = parentCenterlines.GetNumberOfCells()
+    numberOfDaughterPatches = parentCenterlines.GetNumberOfCells()
+    clipIds, numberOfPatchedCenterlinesPoints = ExtractPatchesIds(parentCenterlines, clipPoints)
+    pnt = []
 
-   patchedCenterlines = vtk.vtkPolyData()
-   patchedCenterlinesPoints = vtk.vtkPoints()
-   patchedCenterlinesCellArray = vtk.vtkCellArray()
-   radiusArray = get_vtk_array(radiusArrayName, 1, numberOfPatchedCenterlinesPoints)
-
-   clipIds, numberOfPatchedCenterlinesPoints = ExtractPatchesIds(parentCenterlines, clipPoints)
-   pnt = []
+    patchedCenterlines = vtk.vtkPolyData()
+    patchedCenterlinesPoints = vtk.vtkPoints()
+    patchedCenterlinesCellArray = vtk.vtkCellArray()
+    radiusArray = get_vtk_array(radiusArrayName, 1, numberOfPatchedCenterlinesPoints)
    
-   numberOfCommonPatch = clipIds[0]+1
-   patchedCenterlinesCellArray.InsertNextCell(numberOfCommonPatch)
+    numberOfCommonPatch = clipIds[0]+1
+    patchedCenterlinesCellArray.InsertNextCell(numberOfCommonPatch)
 
-   count = 0
-   getData = parentCenterlines.GetPointData().GetArray(radiusArrayName).GetTuple1
-   for i in range(0, numberOfCommonPatch):
-      patchedCenterlinesPoints.InsertNextPoint(parentCenterlines.GetPoint(i))
-      patchedCenterlinesCellArray.InsertCellPoint(i)
-      radiusArray.SetTuple1(i, getData(i))
-      count+=1 
- 
-   for j in range(numberOfDaughterPatches):
-      cell = vtk.vtkGenericCell()
-      parentCenterlines.GetCell(j,cell)
+    count = 0
+    line = ExtractSingleLine(parentCenterlines, 0)
+    getData = line.GetPointData().GetArray(radiusArrayName).GetTuple1
+    for i in range(0, numberOfCommonPatch):
+        patchedCenterlinesPoints.InsertNextPoint(line.GetPoint(i))
+        patchedCenterlinesCellArray.InsertCellPoint(i)
+        radiusArray.SetTuple1(i, getData(i))
+        count+=1 
 
-      numberOfCellPoints = cell.GetNumberOfPoints()
-      startId = clipIds[j+1]
-      patchNumberOfPoints = numberOfCellPoints-startId
-      patchedCenterlinesCellArray.InsertNextCell(patchNumberOfPoints)
+    for j in range(numberOfDaughterPatches):
+        #cell = vtk.vtkGenericCell()
+        #parentCenterlines.GetCell(j, cell)
+        cell = ExtractSingleLine(parentCenterlines, j)
+        
+        getData = cell.GetPointData().GetArray(radiusArrayName).GetTuple1
+        numberOfCellPoints = cell.GetNumberOfPoints()
+        startId = clipIds[j+1]
+        patchNumberOfPoints = numberOfCellPoints-startId
+        patchedCenterlinesCellArray.InsertNextCell(patchNumberOfPoints)
 
-      for i in range(startId, cell.GetNumberOfPoints()):
-         point = cell.GetPoints().GetPoint(i)
-         patchedCenterlinesPoints.InsertNextPoint(point)
-         patchedCenterlinesCellArray.InsertCellPoint(count)
-         radiusArray.SetTuple1(count, getData(cell.GetPointId(i)))
-         count+=1
+        for i in range(startId, cell.GetNumberOfPoints()):
+            point = cell.GetPoint(i)
+            patchedCenterlinesPoints.InsertNextPoint(point)
+            patchedCenterlinesCellArray.InsertCellPoint(count)
+            radiusArray.SetTuple1(count, getData(i))
+            count+=1
 
-   patchedCenterlines.SetPoints(patchedCenterlinesPoints)
-   patchedCenterlines.SetLines(patchedCenterlinesCellArray)
-   patchedCenterlines.GetPointData().AddArray(radiusArray)
-
-   return patchedCenterlines
+    patchedCenterlines.SetPoints(patchedCenterlinesPoints)
+    patchedCenterlines.SetLines(patchedCenterlinesCellArray)
+    patchedCenterlines.GetPointData().AddArray(radiusArray)
+    
+    return patchedCenterlines
 
 
 def ExtractPatchesIds(parentCl, clipPts):
@@ -62,7 +64,6 @@ def ExtractPatchesIds(parentCl, clipPts):
     pnt_2 = clipPts.GetPoint(2)
     for j in range(parentCl.GetNumberOfCells()):
         cellLine = ExtractSingleLine(parentCl, j)
-
         locator = get_locator(cellLine)
 
         if j==0:
@@ -70,7 +71,7 @@ def ExtractPatchesIds(parentCl, clipPts):
             clipIds.append(upstreamId)
             numberOfPoints += upstreamId + 1
 
-        ID1 = locator.FindClosestPoint(pnt_1) 
+        ID1 = locator.FindClosestPoint(pnt_1)
         ID2 = locator.FindClosestPoint(pnt_2)
 
         distance1 = math.sqrt(distance(pnt_1, cellLine.GetPoints().GetPoint(ID1)))

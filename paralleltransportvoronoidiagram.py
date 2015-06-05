@@ -53,7 +53,7 @@ def ExtractCylindricInterpolationVoronoiDiagram(cellId,pointId,cylinderRadius,vo
     interpolationDataset.SetPoints(interpolationDatasetPoints)
     interpolationDataset.SetVerts(interpolationDatasetCellArray)
     interpolationDataset.GetPointData().AddArray(radiusArray)
-
+    
     return interpolationDataset
 
 
@@ -95,28 +95,20 @@ def ComputeNumberOfMaskedPoints(dataArray):
 
 
 def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0, 
-                                voronoiDataset1, centerlines, direction,
+                                voronoiDataset1, centerlines, step,
                                 clippingPoints):
-    cellLine = ExtractSingleLine(interpolationcellid, centerlines)
+    cellLine = ExtractSingleLine(centerlines, interpolationcellid)
 
     startPoint = clippingPoints.GetPoint(id0)
     endPoint = clippingPoints.GetPoint(id1)
 
     startId = cellLine.FindPoint(startPoint)
     endId = cellLine.FindPoint(endPoint)
-
-    if (direction == 1):
-       gapStartId = startId + 1
-       gapEndId = endId - 1
-       arrivalId = gapEndId + 1
-       endSavingInterval = gapEndId + 1
-       step = 1
-    else:
-       gapStartId = startId - 1
-       gapEndId = endId + 1
-       arrivalId = gapEndId - 1
-       endSavingInterval = gapEndId - 1
-       step = -1
+   
+    gapStartId = startId + 1*step
+    gapEndId = endId - 1*step
+    arrivalId = gapEndId + 1*step
+    endSavingInterval = gapEndId + 1*step
 
     numberOfGapPoints = int(math.fabs(gapEndId - gapStartId)) + 1
     numberOfInterpolationPoints = voronoiDataset0.GetNumberOfPoints()
@@ -142,7 +134,6 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        voronoiVector[1] = voronoiPoint[1] - closestPoint[1]
        voronoiVector[2] = voronoiPoint[2] - closestPoint[2]
        voronoiVectorNorm = vtk.vtkMath.Norm(voronoiVector)
-    
        rotationAngle = ComputeVoronoiVectorToCenterlineAngle(closestPointId,voronoiVector,cellLine)
 
        PTPoints = vtk.vtkPoints()
@@ -151,9 +142,8 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
           localnormal = [0.0,0.0,0.0]
           newVoronoiVector = [0.0,0.0,0.0]
           newVoronoiPoint = [0.0,0.0,0.0]
-           
+          
           transform = vtk.vtkTransform()
-
           point0 = [0.0,0.0,0.0]
           point0 = cellLine.GetPoint(j)
 
@@ -191,7 +181,6 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        numberOfPTPoints = PTPoints.GetNumberOfPoints() 
        lastPTPoint = PTPoints.GetPoint(PTPoints.GetNumberOfPoints()-1)
       
-
        voronoiPointLocator = get_locator(voronoiDataset1)
        
        arrivalVoronoiPointId = voronoiPointLocator.FindClosestPoint(lastPTPoint)
@@ -212,10 +201,7 @@ def VoronoiDiagramInterpolation(interpolationcellid, id0, id1, voronoiDataset0,
        radiusArray = ComputeSpline(voronoiPointRadius,arrivalVoronoiPointRadius,numberOfPTPoints)
        vectorNormArray = ComputeSpline(voronoiVectorNorm,arrivalVoronoiVectorNorm, numberOfPTPoints)
 
-       if (direction==1):
-          pointsToGap = gapStartId - closestPointId
-       else:
-          pointsToGap = closestPointId - gapStartId
+       pointsToGap = (gapStartId - closestPointId)*step
          
        pointId = pointsToGap
        for k in range(gapStartId,endSavingInterval,step):
@@ -376,7 +362,7 @@ def create_new_surface(completeVoronoiDiagram):
 
 
 def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines, 
-                                clippedVoronoi, clippingPoints):
+                                clippedVoronoi, clippingPoints, bif):
     # Copy the voronoi diagram
     completeVoronoiDiagram = vtk.vtkPolyData()
     completeVoronoiDiagram.DeepCopy(clippedVoronoi)
@@ -384,12 +370,11 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
     # The new patch or the entire new?
     numberOfInterpolatedCenterlinesCells = interpolatedCenterlines.GetNumberOfCells()
 
-    for j in range(1, 3):# numberOfInterpolatedCenterlinesCells + 1):
-        print j
+    for j in range(1, 3): #numberOfInterpolatedCenterlinesCells + 1):
         interpolationCellId = j - 1
         startId = 0
         endId = j
-
+        
         startCell = vtk.vtkGenericCell()
         patchCenterlines.GetCell(startId, startCell)
 
@@ -398,7 +383,7 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
         startCellPointRadius = patchCenterlines.GetPointData().GetArray(radiusArrayName)\
                                                         .GetTuple1(startCellPointId)
         startCellPointHalfRadius = startCellPointRadius / 7.0
-
+        
         startInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(startId, 
                                                     startCellPointId, startCellPointRadius, 
                                                     clippedVoronoi, patchCenterlines)
@@ -421,8 +406,8 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
         endHalfInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(endId, 
                                                     endCellPointId, endCellPointHalfRadius, 
                                                     clippedVoronoi, patchCenterlines)
-
-        # Find new points
+   
+        # Find and insert new points
         newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId,
                                                     startId, endId, startInterpolationDataset,
                                                     endHalfInterpolationDataset, 
@@ -430,14 +415,62 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                     clippingPoints)
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                     newVoronoiPointsMISR)
-
-        # Insert new points
+        
         newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId, 
                                                     endId, startId, endInterpolationDataset, 
                                                     startHalfInterpolationDataset, 
-                                                    interpolatedCenterlines, 0,
+                                                    interpolatedCenterlines, -1,
                                                     clippingPoints)
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                     newVoronoiPointsMISR)
+
+    if bif is not None:
+        bif = bif[0]
+        bif_clipped = bif[1]
+        locator = get_locator(bifi[0])
+
+        startPoint = clippingPoints.GetPoint(1)
+        startId = locator.FindClosestPoint(startPoint)
+        startPoint = bif.GetPoint(startID)
+        startR = bif.GetPointData().GetArray(radiusArrayName).GetTuple1(startID)
+        startRHalf = startR / 7.0
+
+        endPoint = clippingPoints.GetPoint(1)
+        endID = locator.FindClosestPoint(endPoint)
+        endPoint = bif.GetPoint(endID)
+        endR = bif.GetPointData().GetArray(radiusArrayName).GetTuple1(endID)
+        endRHalf = endR / 7.0
+
+	startInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(startId, 
+                                                    startCellPointId, startCellPointRadius, 
+                                                    clippedVoronoi, bif_clipped)
+        startHalfInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(startId, 
+                                                    startCellPointId, startCellPointHalfRadius, 
+                                                    clippedVoronoi, bif_clipped)
+
+	endInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(endId, endCellPointId, 
+                                                    endCellPointRadius, clippedVoronoi,
+                                                    patchCenterlines)
+        endHalfInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(endId, 
+                                                    endCellPointId, endCellPointHalfRadius, 
+                                                    clippedVoronoi, patchCenterlines)
+
+        # Find and insert new points
+        newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId,
+                                                    startId, endId, startInterpolationDataset,
+                                                    endHalfInterpolationDataset, 
+                                                    interpolatedCenterlines, 1,
+                                                    clippingPoints)
+        completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
+                                                    newVoronoiPointsMISR)
+        
+        newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId, 
+                                                    endId, startId, endInterpolationDataset, 
+                                                    startHalfInterpolationDataset, 
+                                                    interpolatedCenterlines, -1,
+                                                    clippingPoints)
+        completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
+                                                    newVoronoiPointsMISR)
+
 
     return completeVoronoiDiagram

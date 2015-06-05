@@ -62,7 +62,7 @@ def get_vtk_array(name, comp, num):
     array.SetNumberOfTuples(num)
     for i in range(comp):
         array.FillComponent(i, 0.0)
-    array.SetName(radiusArrayName)
+    array.SetName(name)
     return array
 
 
@@ -104,8 +104,24 @@ def makeCenterlineSections(isurface, ifile, ofile, recompute=False):
     return ReadPolyData(ofile)
 
 
-def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, 
+def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, in_out=None,
                    smooth=True, resampling=True, recompute=False):
+    """A general centerline command. If a centerline file with the same file
+    name alread exists, then the file i just read. To overwrite this set
+    recompute to True. If recomputed is to True then it uses the exsisting points
+    from the old centerline file and no interaction with the interface is
+    needed. Further on one can choose witch points you want to include by
+    giving in_out. The first element in the list is the source point, and if -1
+    is given, is chooses the old inlet, else it chooses outletX, where X is the
+    outlet ID.
+    
+    it an int, number of iterations in the smoothening
+    factor a float, the smoothening factor
+    length a float in (0,1], is the resampling factor
+    smooth is a boolean that could turn on/off smoothening
+    resampling is a boolean that could turn in/off resampling
+    in_out a list of outlet/inlet points that should be uses when recompute"""
+
     # Check if ifile exsists
     if not path.exists(ifile):
         print "The input file: %s does not exsists!" % ifile
@@ -117,18 +133,28 @@ def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1,
         basedir = path.sep.join(path.join(ifile.split(path.sep)[:-2]))
         parameters = getParameters(basedir)
         if parameters.has_key("inlet"):
-            inlet = parameters["inlet"]
+            if in_out is None:
+                inlet = parameters["inlet"]
+            else:
+                inlet = parameters["inlet"] if in_out[0] == -1 else parameters["outlet%s"%in_out[0]]
             source = " -seedselector pointlist -sourcepoints %s %s %s -targetpoints " \
                      % (inlet[0], inlet[1], inlet[2])
+
+            if in_out is not None:
+                points_ = [parameters["outlet%s"%i] for i in in_out[1:]]
+            else:
+                out = [k for k in parameters.keys() if "outlet" in k]
+                out.sort()
+                points_ = [parameters[p] for p in out]
+
             points = []
-            for key, value in parameters.iteritems():
-                if "outlet" in key:
-                    v = [str(p) for p in value]
-                    points += v
+            for p in points_:
+                points += [str(p[0]), str(p[1]), str(p[2])]
 
             text = " ".join(points)
             source += text
             store_points = False
+
 
         else:
             store_points = True
@@ -147,7 +173,6 @@ def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1,
         a = check_output(("vmtkcenterlines -ifile %s%s%s%s -ofile %s") % \
                         (ifile, source, resampling, smooth, ofile), 
                         stderr=STDOUT, shell=True)
-
         # Check the success of the command, vmtk could fail without crashing
         status, text = success(a)
         if not status:
@@ -341,7 +366,7 @@ def ExtractSingleLine(centerlines, id, startID=0, endID=None):
     cell = vtk.vtkGenericCell()
     centerlines.GetCell(id, cell)
     N = cell.GetNumberOfPoints() if endID is None else endID + 1
-    
+
     line = vtk.vtkPolyData()
     cellArray = vtk.vtkCellArray()
     cellArray.InsertNextCell(N - startID)

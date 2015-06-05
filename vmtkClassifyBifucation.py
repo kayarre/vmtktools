@@ -39,8 +39,7 @@ def getData(centerline, centerline_bif, tol):
             r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID_0)
             break
 
-    end, r_end = move_past_sphere(centerline, center, r, point_ID_0) #,
-                                  #stop=point_ID_0*100, step=1)
+    end, r_end = move_past_sphere(centerline, center, r, point_ID_0, stop=point_ID_0*100, step=1)
     data["bif"]["end_point"] = end
     data["bif"]["r_end"] = r_end
     data["bif"]["div_point"] = center
@@ -66,8 +65,7 @@ def getData(centerline, centerline_bif, tol):
                 r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)
                 break
         
-        end, r_end = move_past_sphere(centerline, center, r, point_ID,
-                stop=point_ID*100, step=1, X=1)
+        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1)
         data[counter]["end_point"] = end
         data[counter]["r_end"] = r_end
         data[counter]["r_div"] = r
