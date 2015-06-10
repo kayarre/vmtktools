@@ -6,18 +6,6 @@ from os import path, listdir
 from scipy.interpolate import splrep, splev
 from scipy.signal import argrelextrema, gaussian
 import math
-import subprocess
-
-
-def CenterlineAttribiute(line):
-    tmpFileName = "tmp_cl.vtp"
-    WritePolyData(line, "tmp_cl.vtp")
-    command = ('vmtkcenterlineattributes -ifile %s --pipe vmtkcenterlinegeometry ' + \
-    '-ofile %s -smoothing 0') % (tmpFileName, tmpFileName)
-    subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
-    line = ReadPolyData(tmpFileName)
-    subprocess.check_output('rm ' + tmpFileName, stderr=subprocess.STDOUT, shell=True)
-    return line
 
 
 def splineCenterline(line):
@@ -47,7 +35,7 @@ def splineCenterline(line):
     line = data_to_vtkPolyData(data, header)
 
     # Let vmtk compute curve attributes
-    line = CenterlineAttribiute(line)
+    line = CenterlineAttribiutes(line)
 
     # Compute curvature from the 'exact' spline to get a robust way of
     # finding max / min points on the centerline

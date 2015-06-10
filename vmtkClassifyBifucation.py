@@ -65,7 +65,7 @@ def getData(centerline, centerline_bif, tol):
                 r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)
                 break
         
-        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1)
+        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1.5)
         data[counter]["end_point"] = end
         data[counter]["r_end"] = r_end
         data[counter]["r_div"] = r
@@ -97,20 +97,6 @@ def move_past_sphere(centerline, center, r, start, step=-1, stop=0, X=0.8):
     return tempPoint, r
 
 
-def get_endpoints(centerline_path):
-    """Returns the endpoints of the two streamlines"""
-    centerline = ReadPolyData(centerline_path)
-    end = []
-
-    for i in range(2):
-        cells = centerline.GetCell(i)
-        points = cells.GetPoints()
-        N = points.GetNumberOfPoints() - 1
-        end.append(points.GetPoint(N))
-
-    return end
-
-
 def find_angle(data, u_vec, method, dirname):
     # Following the syntacs of Ingebrigtsen
     phi_0 = math.acos(np.dot(u_vec["bif"], u_vec[0])) * 180 / math.pi
@@ -123,77 +109,40 @@ def find_angle(data, u_vec, method, dirname):
         phi1 = phi_1
         phi2 = phi_0
 
-    text = "\nphi1_" + method + ": " + str(phi1) + "\n"
-    text += "phi2_" + method + ": " + str(phi2)
-    file_path = path.join(dirname, "manifest.txt")
-    if not text_exists(text, file_path):
-        f = open(path.join(dirname, "manifest.txt"), "a")
-        f.write(text)
-        f.close()
-
-
-def text_exists(text, file_path):
-    file = open(file_path, "r")
-    t = file.read()
-    file.close()
-    return text in t
+    new_data = {"phi1_%s" % method: phi1, "phi2_%s" % method: phi2}
+    writeParameters(dirname)
 
 
 def curvature_stats(centerline, centerline_bif, data, dirname, tol):
     opt = data.keys()
     cases = [(opt[0], opt[1]), (opt[0], opt[2]), (opt[1], opt[2])]
-    file_path = path.join(dirname, "manifest.txt")
 
-    # List of points conected to ID
-    points_ids = vtk.vtkIdList()
+    curvature_bif = get_array("Curvature", centerline_bif)
+    curvature = get_array("Curvature", centerline)
 
     for case in cases:
-        stats = []
-
         if "bif" not in case:
             name = "bif"
-            start = data[case[0]]["ID_div"]
-            end = data[case[1]]["ID_div"]
-            curvature = centerline_bif.GetPointData().GetArray("Curvature")
-
-            for i in range(min(start, end), max(start, end) + 1, 1):
-                stats.append(curvature.GetTuple1(i))
+            start = data[case[0]]["ID_end"]
+            end = data[case[1]]["ID_end"]
+            stats = curvature_bif[start:end+1]
 
         else:
             key = case[0] if case[0] != "bif" else case[1]
             key_comp = 0 if key == 1 else 1
             name = "1" if data[key]["r_end"] > data[key_comp]["r_end"] else "2"   
-            centerline.GetCellPoints(key, points_ids)
-            curvature = centerline.GetPointData().GetArray("Curvature")
-             
-            end_point = data[key]["div_point"]
-            i = data["bif"]["i_div"]
-            point = (0,0,0)
-            dist = 1e10
-            dist_prev = 1e10
-            points = []
-
-            # Collect curvature from desired area
-            while dist_prev >= dist:
-                stats.append(curvature.GetTuple1(points_ids.GetId(i)))
-                point = centerline.GetPoint(points_ids.GetId(i))
-                dist_prev = dist
-                dist = math.sqrt(np.sum(abs(np.asarray(end_point) - 
-                                            np.asarray(point))))
-                i += 1
+            
+            locator = get_locator(centerline)
+            end = locator.FindClosestPoint(data[key]["end_point"])
+            stats = curvature[data["bif"]["ID_end"]:end+1]
 
         # Get stats
-        stats = np.asarray(stats)
         mean = np.mean(stats)
         max_ = np.max(stats)
 
         # Write to file
-        text = "\ncurvature_max_%s: %s\ncurvature_mean_%s: %s" % \
-                (name, max_, name, mean)
-        if not text_exists(text, file_path):
-            f = open(path.join(dirname, "manifest.txt"), "a")
-            f.write(text)
-            f.close()
+        new_data = {"curvature_max_%s" % name: max_, "curvature_mean_%s" % name: mean}
+        writeParameters(new_data, dirname)
     
 
 def angle_stats(data):
@@ -231,84 +180,37 @@ def main(dirpath):
     
     # Naming convention on files
     model_path = path.join(dirpath, "surface", "model.vtp")
-    centerline_path = path.join(dirpath, "surface", "model_usr_centerline.vtp")
-    centerline_path_bif = path.join(dirpath, "surface", "model_usr_centerline_bif.vtp")
-    centerline_path_geo = path.join(dirpath, "surface", "model_usr_centerline_geo.vtp")
-    centerline_path_bif_geo = path.join(dirpath, "surface", "model_usr_centerline_bif_geo.vtp")
+    centerline_path = path.join(dirpath, "surface", "centerline_for_angles.vtp")
+    centerline_path_bif = path.join(dirpath, "surface", "centerline_bifurcation.vtp")
+    centerline_path_geo = path.join(dirpath, "surface", "centerline_geo.vtp")
+    centerline_path_bif_geo = path.join(dirpath, "surface", "centerline_geo_bif.vtp")
 
-    # Make the user create the bifurcation centerline
-    if not path.exists(centerline_path_bif):
-        print "Pick the inflow as a source and then pick one outflow on each side of" + \
-            " the ICA(?) bifraction.\nHit enter to continue."
-        #raw_input()
-        subprocess.check_output("vmtk vmtkcenterlines -ifile %s -ofile %s" \
-                                 % (model_path, centerline_path),
-                                stderr=subprocess.STDOUT,
-                                shell=True)
-
-        # The user defined senterline to see the correct bifucation
-        centerline = ReadPolyData(centerline_path)
-
-        # Get the senterline from the two endpoints
-        points = get_endpoints(centerline)
-        subprocess.check_output(("vmtk vmtkcenterlines -ifile %s -ofile %s" + \
-                                 " -seedselector pointlist -sourcepoints %s %s %s -targetpoints " + \
-                                 "%s %s %s") % (model_path, centerline_path_bif, points[0][0], 
-                                                points[0][1], points[0][2], points[1][0],
-                                                points[1][1], points[1][2]),
-                                 stderr=subprocess.STDOUT,
-                                 shell=True)
+    # Make centerlines, will only read if they allready exists
+    centerline = makeCenterline(model_path, centerline_path, smooth=False, resampling=True)
+    centerline_bif = makeCenterline(model_path, cenerline_path_bif, length=0.1
+                                    smooth=False, in_out=[0,1])
                     
-    # If the bifurcation allready have been defined
-    else:
-        centerline = ReadPolyData(centerline_path)
-    
-    centerline_bif = ReadPolyData(centerline_path_bif)
-
-    # Creat a tolerance for diverging
+    # Tolerance for diverging
     centerlineSpacing = math.sqrt(vtk.vtkMath.Distance2BetweenPoints( \
                                   centerline.GetPoint(10), \
                                   centerline.GetPoint(11)))
     divergingTolerance = centerlineSpacing / divergingRatioToSpacingTolerance
 
-    # Find diverging points
+    # Diverging points
     data = getData(centerline, centerline_bif, divergingTolerance)
 
+    # TODO: Extract lines and spline
+
     # Compute centerline properties
-    if not path.exists(centerline_path_geo):
-        subprocess.check_output(("vmtk vmtkcenterlinegeometry -ifile %s -smoothing 1 " + \
-                                 "-iterations 300 -factor 0.1 -outputsmoothed 1 -ofile %s") \
-                                 % (centerline_path, centerline_path_geo),
-                                    stderr=subprocess.STDOUT, shell=True)
+    centerline_geo = CenterlineAttribiute(centerline, remove=False,
+                                          filename=centerline_path_geo,
+                                          smooth=True)
+    centerline_bif_geo = CenterlineAttribiutecenterline_path_bif_geo(centerline_bif, 
+                                          remove=False, filename=centerline_path_geo,
+                                          smooth=True)
 
-    if not path.exists(centerline_path_bif_geo):
-        subprocess.check_output(("vmtk vmtkcenterlinegeometry -ifile %s -smoothing 1 " + \
-                                 "-iterations 300 -factor 0.1 -outputsmoothed 1 -ofile %s") \
-                                 % (centerline_path_bif, centerline_path_bif_geo),
-                                    stderr=subprocess.STDOUT, shell=True)
-
-    centerline_geo = ReadPolyData(centerline_path_geo)
-    centerline_bif_geo = ReadPolyData(centerline_path_bif_geo)
     curvature_stats(centerline_geo, centerline_bif_geo, data, dirpath,
                     divergingTolerance)
-
-
-def csv_to_txt(folder):
-    """Make it easier to access data with a normal txt file"""
-    csv = path.join(folder, "manifest.csv")
-    txt = path.join(folder, "manifest.txt")
-    reader = open(csv, "r")
-    header = reader.readline().split(",")
-    row = reader.readline().split(",")
-    for i in range(len(header)):
-        header[i] = ": ".join([header[i].replace("\n",""),
-                               row[i].replace("\n", "")])
-    text = "\n".join(header)
-    reader.close()
-    writer = open(csv, "w")
-    writer.write(text)
-    writer.close()
-    subprocess.check_output("mv " + csv + " " + txt, stderr=subprocess.STDOUT, shell=True)
     
 
 if __name__ == "__main__":

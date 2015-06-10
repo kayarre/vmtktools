@@ -33,11 +33,14 @@ def read_command_line():
                         help="Leave one branch untuched")
     parser.add_argument("--bif", type=bool, default=False, 
                         help="interpolate bif as well")
+    parser.add_argument("--addPoint", type=bool, default=False,
+                        help="Add additional point for integration")
 
     args = parser.parse_args()
     ang_ = math.pi/args.a
 
-    return args.s, ang_, args.smooth_factor, args.leave1, args.leave2, args.bif
+    return args.s, ang_, args.smooth_factor, args.leave1, args.leave2, \
+           args.bif, args.addPoint
 
 
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
@@ -93,7 +96,7 @@ def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
 
         pointRadius = clipped_voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
         M, O = check_rotate(point)
-        tmp = np.dot(np.dot(np.dot(np.asarray(point) - O, M), R), R_inv) + O
+        tmp = np.dot(np.dot(np.dot(np.asarray(point) - O, R), M), R_inv) + O
         maskedPoints.InsertNextPoint(tmp)
         radiusArray.SetTuple1(i, pointRadius)
         cellArray.InsertNextCell(1)
@@ -123,38 +126,34 @@ def rotate_cl(patch_cl, div_points, rotation_matrix, R):
 
     count = 0
     for i in range(patch_cl.GetNumberOfCells()):
-        cell = vtk.vtkGenericCell()
-        patch_cl.GetCell(i, cell)
-        
+        cell = ExtractSingleLine(patch_cl, i)
         centerlineCellArray.InsertNextCell(cell.GetNumberOfPoints())
-        
-        start = cell.GetPoints().GetPoint(0)
-        dist = line0.GetPoints().GetPoint(locator0.FindClosestPoint(start))
+
+        start = cell.GetPoint(0)
+        dist = line0.GetPoint(locator0.FindClosestPoint(start))
         test = math.sqrt(distance(start, dist)) > divergingRatioToSpacingTolerance
-        
-        if test:
-            cellLine = ExtractSingleLine(patch_cl, i)
 
-            locator = get_locator(cellLine)
+        if test or len(div_points) == 2:
+            locator = get_locator(cell)
 
-            pnt1 = cellLine.GetPoints().GetPoint(locator.FindClosestPoint(div_points[1]))
-            pnt2 = cellLine.GetPoints().GetPoint(locator.FindClosestPoint(div_points[2]))
-            dist1 = math.sqrt(distance(pnt1, div_points[1]))
-            dist2 = math.sqrt(distance(pnt2, div_points[2]))
-            k = 1 if dist1 < dist2 else 2
+            pnt1 = cell.GetPoint(locator.FindClosestPoint(div_points[-2]))
+            pnt2 = cell.GetPoint(locator.FindClosestPoint(div_points[-1]))
+            dist1 = math.sqrt(distance(pnt1, div_points[-2]))
+            dist2 = math.sqrt(distance(pnt2, div_points[-1]))
+            k = -2 if dist1 < dist2 else -1
             O = div_points[k]
-            m = rotation_matrix[k]
+            m = rotation_matrix[k+3]
 
         else:
             m = I
             O = np.array([0, 0, 0])
         
+        getData = cell.GetPointData().GetArray(radiusArrayName).GetTuple1
         for j in range(cell.GetNumberOfPoints()):
             point = np.asarray(cell.GetPoints().GetPoint(j))
-            tmp = np.dot(np.dot(np.dot(point - O, m), R), R_inv) + O
+            tmp = np.dot(np.dot(np.dot(point - O, R), m), R_inv) + O
             centerlinePoints.InsertNextPoint(tmp)
-            radiusArray.SetTuple1(count, patch_cl.GetPointData().\
-                            GetArray(radiusArrayName).GetTuple1(cell.GetPointId(j)))
+            radiusArray.SetTuple1(count, getData(j))
             centerlineCellArray.InsertCellPoint(count)
             count += 1
 
@@ -193,15 +192,37 @@ def rotationMatrix(data, angle, leave1, leave2):
 
     I = np.eye(3)
 
-    if tmp1[0] > tmp2[0]:
+    if tmp1[0] < tmp2[0]:
         m = {1: m2, 2: m1}
 
     if leave1:
-        m[1] = I
+        k = 1 if data[0][r_end] > data[1][r_end] else 2
+        m[2] = I
     if leave2:
+        k = 1 if data[0][r_end] < data[1][r_end] else 2
         m[2] = I
 
     return R, m
+
+
+def get_points(data, key, R, m, rotated=True, bif=False):
+    div_points = np.asarray([data["bif"][key], data[0][key], data[1][key]])
+
+    # Origo of the bifurcation
+    O_key = "div_point"
+    O = np.asarray([data["bif"][O_key], data[0][O_key], data[1][O_key]])
+    O = np.sum(np.asarray(O),axis=0)/3.
+
+    if rotated:
+        R_inv = np.linalg.inv(R)
+        for i in range(len(div_points)):
+            m_ = m[i] if i > 0 else np.eye(3)
+            div_points[i] = np.dot(np.dot(np.dot(div_points[i] - O, R), m_), R_inv) + O
+
+    points = vtk.vtkPoints()
+    for point in div_points[bif:]:
+        points.InsertNextPoint(point)
+    return points, div_points[bif:]
 
 
 def get_startpoint(centerline):
@@ -209,7 +230,7 @@ def get_startpoint(centerline):
     return line.GetPoints().GetPoint(0)
 
 
-def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif):
+def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
     # Input filenames
     model_path = path.join(dirpath, "surface", "model.vtp")
 
@@ -217,24 +238,25 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif):
     centerline_path = path.join(dirpath, "surface", "centerline_for_rotating.vtp")
     centerline_bif_path = path.join(dirpath, "surface", "centerline_bifurcation.vtp")
     centerline_new_path = path.join(dirpath, "surface", "centerline_interpolated.vtp")
-    centerline_new_bif_path = path.join(dirpath, "surface", "centerline_interpolated.vtp")
-    centerline_clipped_path = path.join(dirpath, "surface", "centerline_patch.vtp")
+    centerline_new_bif_path = path.join(dirpath, "surface", "centerline_interpolated_bif.vtp")
+    centerline_clipped_path = path.join(dirpath, "surface", "centerline_clipped.vtp")
     centerline_rotated_path = path.join(dirpath, "surface", "centerline_rotated.vtp")
-    centerline_rotated_path = path.join(dirpath, "surface", "centerline_rotated_bif.vtp")
-    centerline_bif_clipped_path = path.join(dirpath, "surface", "centerline_bif_clipped.vtp")
+    centerline_rotated_bif_path = path.join(dirpath, "surface", "centerline_rotated_bif.vtp")
+    centerline_bif_clipped_path = path.join(dirpath, "surface", "centerline_clipped_bif.vtp")
     if smooth:
         voronoi_path = path.join(dirpath, "surface", "voronoi.vtp")
     else:
         voronoi_path = path.join(dirpath, "surface", "voronoi_smoothed.vtp")
     voronoi_clipped_path = path.join(dirpath, "surface", "voronoi_clipped.vtp")
     voronoi_rotated_path = path.join(dirpath, "surface", "voronoi_rotated.vtp")
-    if l1 or l2:
-        s = "l1" if l1 else "l2"
-        model_new_surface = path.join(dirpath, "surface", "model_angle_%.04f_%s.vtp" % (angle, s))
-    else:
-        model_new_surface = path.join(dirpath, "surface", "model_angle_%s.vtp" % angle)
+    s = "_pi%s" % (1/(angle/math.pi))
+    s += "" if not l1 else "_l1"
+    s += "" if not l2 else "_l2"
+    s += "" if not bif else "_bif"
+    s += "" if not smooth else "_smooth"
+    s += "" if not addPoint else "_extraPoint"
+    model_new_surface = path.join(dirpath, "surface", "model_angle"+s+".vtp")
 
-    # Check if data already exsists, if not it is created
     # Model
     if not path.exists(model_path):
         print "The given directory: %s did not contain surface/model.vtp" % dirpath
@@ -259,18 +281,23 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif):
 
     # Get data from centerlines
     data = getData(centerline, centerline_bif, divergingTolerance)
+    R, m = rotationMatrix(data, angle, l1, l2) 
 
+    key = "div_point"
+    div_points_rotated_bif = get_points(data, key, R, m, rotated=True, bif=True)
+    div_points_rotated = get_points(data, key, R, m, rotated=True, bif=False)
+    
     key = "end_point"
-    div_points = [data["bif"][key], data[0][key], data[1][key]]
-    clippingPoints = vtk.vtkPoints()
-    for point in div_points:
-        clippingPoints.InsertNextPoint(point)
-    #div_points.append(get_startpoint(centerline))
+    end_points_bif = get_points(data, key, R, m, rotated=False, bif=True)
+    end_points = get_points(data, key, R, m, rotated=False, bif=False)
+    end_points_rotated = get_points(data, key, R, m, rotated=True, bif=False)
+    end_points_rotated_bif = get_points(data, key, R, m, rotated=True, bif=True)
 
     print "Clipping centerlines and voronoi diagram."
-    patch_cl = CreateParentArteryPatches(centerline, clippingPoints)
-    patch_bif = CreateParentArteryPatches(centerline_bif_clipped_path, clippingPoints)
+    patch_cl = CreateParentArteryPatches(centerline, end_points[0])
+    patch_bif = CreateParentArteryPatches(centerline_bif, end_points_bif[0])
     WritePolyData(patch_cl, centerline_clipped_path)
+    WritePolyData(patch_bif, centerline_bif_clipped_path)
     
     # Clipp the voronoi diagram
     masked_voronoi = MaskVoronoiDiagram(voronoi, patch_cl)
@@ -279,29 +306,34 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif):
     
     # Rotate branches (Both centerline and voronoi)
     print "Rotate centerlines and voronoi diagram."
-    R, m = rotationMatrix(data, angle, l1, l2)
-    
-    rotated_cl = rotate_cl(patch_cl, div_points, m, R)
-    rotated_bif = rotate_cl(patch_bif, div_points, m, R)
+    rotated_cl = rotate_cl(patch_cl, end_points[1], m, R)
+    rotated_bif = rotate_cl(patch_bif, end_points_bif[1], m, R)
     WritePolyData(rotated_cl, centerline_rotated_path)
     WritePolyData(rotated_bif, centerline_rotated_bif_path)
 
-    rotated_voronoi = rotate_voronoi(voronoi_clipped, patch_cl, div_points, m, R)
+    rotated_voronoi = rotate_voronoi(voronoi_clipped, patch_cl, end_points[1], m, R)
     WritePolyData(rotated_voronoi, voronoi_rotated_path)
-
+    
     # Interpolate the centerline
     print "Interpolate centerlines and voronoi diagram."
-    interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline, clippingPoints)
-    interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline, clippingPoints)
+    interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline,
+                                                  end_points_rotated[0],
+                                                  div_points_rotated[0],
+                                                  addPoint)
+    interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
+                                                   end_points_rotated_bif[0],
+                                                   div_points_rotated_bif[0],
+                                                   addPoint=False)
     WritePolyData(interpolated_cl, centerline_new_path)
     WritePolyData(interpolated_bif, centerline_new_bif_path)
-    
+
     # Interpolate voronoi diagram
     bif = [interpolated_bif, rotated_bif] if bif else None
-    interpolated_voronoi = interpolate_voronoi_diagram(interpolated_cl, patch_cl, 
+    interpolated_voronoi = interpolate_voronoi_diagram(interpolated_cl, rotated_cl, 
                                                        rotated_voronoi,
-                                                       clippingPoints, bif)
+                                                       end_points_rotated[0], bif)
     WritePolyData(interpolated_voronoi, "voronoi_test.vtp")
+    interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
 
     # Write a new surface from the new voronoi diagram
     print "Write new surface"
@@ -310,9 +342,9 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif):
 
 
 if  __name__ == "__main__":
-    smooth, angle, smooth_factor, l1, l2, bif = read_command_line()
+    smooth, angle, smooth_factor, l1, l2, bif, addPoint = read_command_line()
     #basedir = "."
     #for folder in listdir(basedir):
     #    if folder[:2] in ["P0", "C0"]:
     #        main(path.join(basedir, folder), smooth, smooth_factor, angle)
-    main("C0001", smooth, smooth_factor, angle, l1, l2, bif)
+    main("C0001", smooth, smooth_factor, angle, l1, l2, bif, addPoint)

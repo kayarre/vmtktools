@@ -73,6 +73,40 @@ def get_locator(centerline):
     return locator
 
 
+def remove_distant_points(voronoi, centerline):
+    N = voronoi.GetNumberOfPoints()
+    newVoronoi = vtk.vtkPolyData()
+    cellArray = vtk.vtkCellArray()
+    points = vtk.vtkPoints()
+    radiusArray = get_vtk_array(radiusArrayName, 1, N)
+    
+    locator = get_locator(centerline)
+    get_data = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1
+    limit = get_data(0)*100
+
+    count = 0
+    for i in range(N):
+        point = voronoi.GetPoint(i)
+        cl_point = centerline.GetPoint(locator.FindClosestPoint(point))
+        dist = math.sqrt(distance(point, cl_point))
+        if dist > get_data(i)*3 or get_data(i) > limit:
+            print dist, get_data(i)*3, point, cl_point
+            count += 1
+            print "Removed a point from the voronoi diagram", count
+            continue
+        points.InsertNextPoint(point)
+        cellArray.InsertNextCell(1)
+        cellArray.InsertCellPoint(i)
+        value = get_data(i)
+        radiusArray.SetTuple1(i, value)
+
+    newVoronoi.SetPoints(points)
+    newVoronoi.SetVerts(cellArray)
+    newVoronoi.GetPointData().AddArray(radiusArray)
+
+    return newVoronoi
+
+
 def success(text):
     if not "error: " in text.lower():
         return True, ""
@@ -193,6 +227,33 @@ def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, in_out=None,
             writeParameters(parameters, basedir)
     
     return ReadPolyData(ofile)
+
+
+def CenterlineAttribiute(line, remove=True, filename=None, smooth=False,
+                         it=300, factor=0.1):
+    if filename is None:
+        filename = "tmp_cl.vtp"
+        WritePolyData(line, FileName)
+
+    command = ('vmtkcenterlineattributes -ifile %s --pipe vmtkcenterlinegeometry ' + \
+               '-ofile %s') % (filename, filename)
+    if smooth:
+        command += ' -smoothing 1 iterations %s -factor %s -outputsmoothd 1' %
+                   (it, factor)
+    else:
+        command += ' -smoothing 0'
+    a = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+    status, text = success(a)
+
+    if not status:
+        print "smoething went wront when finding the attributes for the centerline"
+        print text
+        sys.exit(0)
+
+    line = ReadPolyData(tmpFileName)
+    if remove:
+        subprocess.check_output('rm ' + tmpFileName, stderr=subprocess.STDOUT, shell=True)
+    return line
 
 
 def makeVoronoi(ifile, ofile, recompute=False):
