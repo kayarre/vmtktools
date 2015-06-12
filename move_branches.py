@@ -14,6 +14,9 @@ def read_command_line():
     """Read arguments from commandline"""
     parser = ArgumentParser()
 
+    parser.add_argument('--d', '--dir_path', type=str, default=".", 
+                        help="Path to the folder with all the cases")
+    parser.add_argument('--case', type=str, default=None, help="Choose case")
     parser.add_argument('--s', '--smooth', type=bool, default=False,
                         help="If the original voronoi diagram (surface) should be" + \
                         "smoothed before it is manipulated", metavar="smooth") 
@@ -35,12 +38,15 @@ def read_command_line():
                         help="interpolate bif as well")
     parser.add_argument("--addPoint", type=bool, default=False,
                         help="Add additional point for integration")
+    parser.add_argument("--lower", type=bool, default=False,
+                        help="Make a fourth line to interpolate along that" + \
+                             " is lower than the other bif line.")
 
     args = parser.parse_args()
     ang_ = math.pi/args.a
 
     return args.s, ang_, args.smooth_factor, args.leave1, args.leave2, \
-           args.bif, args.addPoint
+           args.bif, args.addPoint, args.d, args.case, args.lower
 
 
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
@@ -230,23 +236,24 @@ def get_startpoint(centerline):
     return line.GetPoints().GetPoint(0)
 
 
-def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
+def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
     # Input filenames
     model_path = path.join(dirpath, "surface", "model.vtp")
 
     # Output names
+    model_smoothed_path = path.join(dirpath, "surface", "model_smooth.vtp")
     centerline_path = path.join(dirpath, "surface", "centerline_for_rotating.vtp")
     centerline_bif_path = path.join(dirpath, "surface", "centerline_bifurcation.vtp")
     centerline_new_path = path.join(dirpath, "surface", "centerline_interpolated.vtp")
     centerline_new_bif_path = path.join(dirpath, "surface", "centerline_interpolated_bif.vtp")
+    centerline_new_bif_lower_path = path.join(dirpath, "surface", \
+                                      "centerline_interpolated_bif_lower.vtp")
     centerline_clipped_path = path.join(dirpath, "surface", "centerline_clipped.vtp")
     centerline_rotated_path = path.join(dirpath, "surface", "centerline_rotated.vtp")
     centerline_rotated_bif_path = path.join(dirpath, "surface", "centerline_rotated_bif.vtp")
     centerline_bif_clipped_path = path.join(dirpath, "surface", "centerline_clipped_bif.vtp")
-    if smooth:
-        voronoi_path = path.join(dirpath, "surface", "voronoi.vtp")
-    else:
-        voronoi_path = path.join(dirpath, "surface", "voronoi_smoothed.vtp")
+    voronoi_path = path.join(dirpath, "surface", "voronoi.vtp")
+    voronoi_smoothed_path = path.join(dirpath, "surface", "voronoi_smoothed.vtp")
     voronoi_clipped_path = path.join(dirpath, "surface", "voronoi_clipped.vtp")
     voronoi_rotated_path = path.join(dirpath, "surface", "voronoi_rotated.vtp")
     s = "_pi%s" % (1/(angle/math.pi))
@@ -255,6 +262,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
     s += "" if not bif else "_bif"
     s += "" if not smooth else "_smooth"
     s += "" if not addPoint else "_extraPoint"
+    s += "" if not lower else "_lower"
     model_new_surface = path.join(dirpath, "surface", "model_angle"+s+".vtp")
 
     # Model
@@ -262,17 +270,23 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
         print "The given directory: %s did not contain surface/model.vtp" % dirpath
         sys.exit(0)
 
-    # Voronoi
-    print "Compute voronoi diagram"
-    voronoi = makeVoronoi(model_path, voronoi_path)
-
     # Centerline
     centerline = makeCenterline(model_path, centerline_path, length=0.1, smooth=False)
     centerline_bif = makeCenterline(model_path, centerline_bif_path,
                                     in_out=[0,1], length=0.1, smooth=False)
 
-    # TODO: Control the curvature in the bifurcation
-    
+    # Voronoi
+    print "Compute voronoi diagram"
+    voronoi = makeVoronoi(model_path, voronoi_path)
+    if not path.exists(voronoi_smoothed_path) and smooth:
+        voronoi_smoothed = SmoothClippedVoronoiDiagram(voronoi, centerline, 0.25)
+        WritePolyData(voronoi_smoothed, voronoi_smoothed_path)
+
+        surface_smoothed = create_new_surface(voronoi_smoothed)
+        WritePolyData(surface_smoothed, model_smoothed_path)
+
+    voronoi = voronoi if not smooth else ReadPolyData(voronoi_smoothed_path)
+
     # Create a tolerance for diverging
     centerlineSpacing = math.sqrt(vtk.vtkMath.Distance2BetweenPoints( \
                                     centerline.GetPoint(10), \
@@ -286,6 +300,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
     key = "div_point"
     div_points_rotated_bif = get_points(data, key, R, m, rotated=True, bif=True)
     div_points_rotated = get_points(data, key, R, m, rotated=True, bif=False)
+    div_points = get_points(data, key, R, m, rotated=False, bif=False)
     
     key = "end_point"
     end_points_bif = get_points(data, key, R, m, rotated=False, bif=True)
@@ -316,6 +331,8 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
     
     # Interpolate the centerline
     print "Interpolate centerlines and voronoi diagram."
+    addPoint_ = False
+    lower_ = [False]
     interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline,
                                                   end_points_rotated[0],
                                                   div_points_rotated[0],
@@ -323,16 +340,32 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
     interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
                                                    end_points_rotated_bif[0],
                                                    div_points_rotated_bif[0],
-                                                   addPoint=False)
+                                                   False,)
+    if lower:
+        print "Interpolate the lower thing"
+        center = np.sum(div_points[1], axis=0)/3.
+        div_points_rotated_bif[0].SetPoint(0, center[0], center[1], center[2])
+        interpolated_bif_lower = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
+                                                       end_points_rotated_bif[0],
+                                                       div_points_rotated_bif[0],
+                                                       addPoint)
+        WritePolyData(interpolated_bif_lower, centerline_new_bif_lower_path)
     WritePolyData(interpolated_cl, centerline_new_path)
     WritePolyData(interpolated_bif, centerline_new_bif_path)
 
     # Interpolate voronoi diagram
-    bif = [interpolated_bif, rotated_bif] if bif else None
+    if lower and bif:
+        bif = [interpolated_bif, interpolated_bif_lower, rotated_bif]
+    elif bif:
+        bif = [interpolated_bif, rotated_bif] if bif else None
+    elif lower:
+        bif = [interpolated_bif_lower, rotated_bif] if lower else None
+
     interpolated_voronoi = interpolate_voronoi_diagram(interpolated_cl, rotated_cl, 
                                                        rotated_voronoi,
-                                                       end_points_rotated[0], bif)
-    WritePolyData(interpolated_voronoi, "voronoi_test.vtp")
+                                                       end_points_rotated[0],
+                                                       bif, lower)
+    new_surface = create_new_surface(interpolated_voronoi)
     interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
 
     # Write a new surface from the new voronoi diagram
@@ -342,9 +375,9 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint):
 
 
 if  __name__ == "__main__":
-    smooth, angle, smooth_factor, l1, l2, bif, addPoint = read_command_line()
-    #basedir = "."
-    #for folder in listdir(basedir):
-    #    if folder[:2] in ["P0", "C0"]:
-    #        main(path.join(basedir, folder), smooth, smooth_factor, angle)
-    main("C0001", smooth, smooth_factor, angle, l1, l2, bif, addPoint)
+    smooth, angle, smooth_factor, l1, l2, bif, addPoint, basedir, case, lower = read_command_line()
+    folders = listdir(basedir) if case is None else [case]
+    for folder in folders:
+        if folder[:2] in ["P0", "C0"]:
+            main(path.join(basedir, folder), smooth, smooth_factor, angle, l1,
+                  l2, bif, addPoint, lower)

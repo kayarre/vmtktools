@@ -105,7 +105,7 @@ def InterpolatePatchCenterlines(patchCenterlines, parentCenterlines,
     if addPoint:
         additionalPoint = divergingPoints.GetPoint(0)
         for i in range(parentCenterlines.GetNumberOfCells()):
-            line = ExtractSingleLine(parentCenterlines, i) 
+            line = ExtractSingleLine(parentCenterlines, i)
             additionalPointIds.append(line.FindPoint(additionalPoint))
     else:
         additionalPoint = clippingPoints.GetPoint(0)
@@ -191,6 +191,3 @@ def InterpolateTwoCells(startCell, endCell, numberOfSplinePoints, additionalPoin
     for i in range(numberOfSplinePoints):
         points.SetPoint(i,xspline.Evaluate(float(i)),yspline.Evaluate(float(i)),zspline.Evaluate(float(i)))
     return points
-
-
-useAdditionalInterpolationPoint = 0      # automatically set to 1 for terminal aneurysms  

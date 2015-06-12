@@ -1,100 +1,24 @@
 import vtk
 import math
+from argparse import ArgumentParser
 import subprocess
 from common import *
 import numpy as np
 from os import path, listdir
+from landmark import splineCenterline
 
 
-def getData(centerline, centerline_bif, tol):
-    # Declear variables before loop incase values are not found
-    diverging_point_ID = -1
-    diverging_point = [0.0, 0.0, 0.0]
-    diverging_point_MISR = -1
+def read_command_line():
+    """Read arguments from commandline"""
+    parser = ArgumentParser()
 
-    clipping_point_ID = -1
-    clipping_point = [0.0, 0.0, 0.0]
-    data = {"bif":{}, 0:{}, 1:{}}
+    parser.add_argument('--dir_path', '--d', type=str, default=".",
+                        help="Path to the folder with all the cases",
+                        metavar="PATH")
 
-    # List of points conected to ID
-    points_ids_0 = vtk.vtkIdList()
-    points_ids_1 = vtk.vtkIdList()
+    args = parser.parse_args()
 
-    # One is the branch to the left and the other is the one to the right
-    centerline.GetCellPoints(0, points_ids_0)
-    centerline.GetCellPoints(1, points_ids_1)
-
-    # Find lower clipping point
-    N = min(points_ids_0.GetNumberOfIds(), points_ids_1.GetNumberOfIds())
-    for i in range(0, N):
-        cell_point_0 = centerline.GetPoint(points_ids_0.GetId(i))
-        cell_point_1 = centerline.GetPoint(points_ids_1.GetId(i))
-        
-        distance_between_points = math.sqrt(distance(cell_point_0, cell_point_1))
-        if distance_between_points > tol:
-            tmpI = i
-            point_ID_0 = points_ids_0.GetId(i)
-            point_ID_1 = points_ids_1.GetId(i)
-            center = centerline.GetPoint(point_ID_0)
-            r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID_0)
-            break
-
-    end, r_end = move_past_sphere(centerline, center, r, point_ID_0, stop=point_ID_0*100, step=1)
-    data["bif"]["end_point"] = end
-    data["bif"]["r_end"] = r_end
-    data["bif"]["div_point"] = center
-    data["bif"]["ID_div"] = point_ID_0
-    data["bif"]["i_div"] = tmpI
-    data["bif"]["r_div"] = r
-
-    # Find the diverging point for anterior and midt bifurcation
-    # continue further downstream in each direction and stop when
-    # a point is closer than tol, than move point MISR * X
-    locator = get_locator(centerline_bif)
-
-    counter = 0
-    for point_ids in [points_ids_0, points_ids_1]:
-        for i in range(tmpI, point_ids.GetNumberOfIds(), 1):
-            tmp_point = centerline.GetPoint(point_ids.GetId(i))
-            closest_point_ID = locator.FindClosestPoint(tmp_point)
-            closest_point = centerline_bif.GetPoint(closest_point_ID)
-            distance_between_points = distance(tmp_point, closest_point)
-            if distance_between_points < tol:
-                point_ID = point_ids.GetId(i)
-                center = centerline.GetPoint(point_ID)
-                r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)
-                break
-        
-        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1.5)
-        data[counter]["end_point"] = end
-        data[counter]["r_end"] = r_end
-        data[counter]["r_div"] = r
-        data[counter]["ID_end"] = locator.FindClosestPoint(data[counter]["end_point"])
-        data[counter]["ID_div"] = locator.FindClosestPoint(center)
-        data[counter]["div_point"] = center
-        
-        counter += 1
-        
-    return data
-
-
-def move_past_sphere(centerline, center, r, start, step=-1, stop=0, X=0.8):
-    """Moves a point along the centerline until it as outside MIS"""
-    # Create the minimal inscribed sphere
-    MISphere = vtk.vtkSphere()
-    MISphere.SetCenter(center)
-    MISphere.SetRadius(r * X)
-    tempPoint = [0.0, 0.0, 0.0]
-
-    # Go the length of one MISR backwards
-    for i in range(start, stop, step):
-        value = MISphere.EvaluateFunction(centerline.GetPoint(i))
-        if (value>=0.0):
-            tempPoint = centerline.GetPoint(i)
-            break
-
-    r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
-    return tempPoint, r
+    return args.dir_path
 
 
 def find_angle(data, u_vec, method, dirname):
@@ -113,37 +37,41 @@ def find_angle(data, u_vec, method, dirname):
     writeParameters(dirname)
 
 
-def curvature_stats(centerline, centerline_bif, data, dirname, tol):
-    opt = data.keys()
-    cases = [(opt[0], opt[1]), (opt[0], opt[2]), (opt[1], opt[2])]
+def curvature_stats(centerline, centerline_bif, data, folder):
+    key = "end_point"
+    for i in range(3):
+        if i != 2:
+            startPoint = data["bif"][key]
+            endPoint = data[i][key]
+            tmp = ExtractSingleLine(centerline, i)
 
-    curvature_bif = get_array("Curvature", centerline_bif)
-    curvature = get_array("Curvature", centerline)
-
-    for case in cases:
-        if "bif" not in case:
-            name = "bif"
-            start = data[case[0]]["ID_end"]
-            end = data[case[1]]["ID_end"]
-            stats = curvature_bif[start:end+1]
+            # Find largest and smallest daugther branch
+            other = 0 if i == 1 else 0
+            key_line = "1" if data[i]["r_end"] > data[other]["r_end"] else "2"
 
         else:
-            key = case[0] if case[0] != "bif" else case[1]
-            key_comp = 0 if key == 1 else 1
-            name = "1" if data[key]["r_end"] > data[key_comp]["r_end"] else "2"   
-            
-            locator = get_locator(centerline)
-            end = locator.FindClosestPoint(data[key]["end_point"])
-            stats = curvature[data["bif"]["ID_end"]:end+1]
+            startPoint = data[0][key]
+            endPoint = data[1][key]
+            tmp = ExtractSingleLine(centerline_bif, 0)
+            key_line = "bif"
 
-        # Get stats
-        mean = np.mean(stats)
-        max_ = np.max(stats)
+        locator = get_locator(tmp)
+        startID_ = locator.FindClosestPoint(startPoint)
+        endID_ = locator.FindClosestPoint(endPoint)
+        startID = min(startID_, endID_)
+        endID = max(startID_, endID_)
+        
+        line = ExtractSingleLine(tmp, 0, startID=startID, endID=endID)
+        line = splineCenterline(line, nknots=4)
+        WritePolyData(line[0], path.join(folder, "surface", "spline_%s.vtp" % key_line))
 
-        # Write to file
-        new_data = {"curvature_max_%s" % name: max_, "curvature_mean_%s" % name: mean}
-        writeParameters(new_data, dirname)
-    
+        curvature = get_array("Curvature", line[0])
+        mean = np.mean(curvature)
+        max_ = np.max(curvature)
+
+        new = {"curvature_max_new_%s" % key_line: max_, "curvature_mean_new_%s" % key_line: mean}
+        writeParameters(new, folder)
+
 
 def angle_stats(data):
     # Create unit vectors
@@ -186,36 +114,26 @@ def main(dirpath):
     centerline_path_bif_geo = path.join(dirpath, "surface", "centerline_geo_bif.vtp")
 
     # Make centerlines, will only read if they allready exists
-    centerline = makeCenterline(model_path, centerline_path, smooth=False, resampling=True)
-    centerline_bif = makeCenterline(model_path, cenerline_path_bif, length=0.1
+    centerline = makeCenterline(model_path, centerline_path, smooth=False, resampling=False)
+    centerline_bif = makeCenterline(model_path, centerline_path_bif, resampling=False,
                                     smooth=False, in_out=[0,1])
                     
     # Tolerance for diverging
-    centerlineSpacing = math.sqrt(vtk.vtkMath.Distance2BetweenPoints( \
-                                  centerline.GetPoint(10), \
-                                  centerline.GetPoint(11)))
+    centerlineSpacing = math.sqrt(distance(centerline.GetPoint(10), \
+                                           centerline.GetPoint(11)))
     divergingTolerance = centerlineSpacing / divergingRatioToSpacingTolerance
 
     # Diverging points
     data = getData(centerline, centerline_bif, divergingTolerance)
-
-    # TODO: Extract lines and spline
-
-    # Compute centerline properties
-    centerline_geo = CenterlineAttribiute(centerline, remove=False,
-                                          filename=centerline_path_geo,
-                                          smooth=True)
-    centerline_bif_geo = CenterlineAttribiutecenterline_path_bif_geo(centerline_bif, 
-                                          remove=False, filename=centerline_path_geo,
-                                          smooth=True)
-
-    curvature_stats(centerline_geo, centerline_bif_geo, data, dirpath,
-                    divergingTolerance)
+    angle_stats(data)
+    curvature_stats(centerline, centerline_bif, data, dirpath)
     
 
 if __name__ == "__main__":
-    for folder in listdir("."):
-        if path.isdir(folder) and folder != "backup":
+    basedir = read_command_line()
+    for folder in listdir(basedir):
+        folder_path = path.join(basedir, folder)
+        if path.isdir(folder_path) and "P0" in folder or "C0" in folder:
             print "Looking at case", folder
-            main(folder)
-    #main("C0039")
+            main(folder_path)
+    #main("C0001")

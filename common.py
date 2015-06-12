@@ -78,27 +78,36 @@ def remove_distant_points(voronoi, centerline):
     newVoronoi = vtk.vtkPolyData()
     cellArray = vtk.vtkCellArray()
     points = vtk.vtkPoints()
-    radiusArray = get_vtk_array(radiusArrayName, 1, N)
+    radius = np.zeros(N)
     
     locator = get_locator(centerline)
     get_data = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1
-    limit = get_data(0)*100
+    limit = get_data(0)
+    limit = limit * 50
 
     count = 0
     for i in range(N):
         point = voronoi.GetPoint(i)
-        cl_point = centerline.GetPoint(locator.FindClosestPoint(point))
+        ID = locator.FindClosestPoint(point)
+        cl_point = centerline.GetPoint(ID)
         dist = math.sqrt(distance(point, cl_point))
-        if dist > get_data(i)*3 or get_data(i) > limit:
-            print dist, get_data(i)*3, point, cl_point
+        
+        if dist/3 > get_data(i) or get_data(i) > limit:
             count += 1
-            print "Removed a point from the voronoi diagram", count
             continue
+
         points.InsertNextPoint(point)
         cellArray.InsertNextCell(1)
-        cellArray.InsertCellPoint(i)
+        cellArray.InsertCellPoint(i-count)
         value = get_data(i)
-        radiusArray.SetTuple1(i, value)
+        radius[i-count] = value
+
+    print "Removed %s points from the voronoi diagram" % count
+    
+    radiusArray = get_vtk_array(radiusArrayName, 1, N-count)
+    for i in range(N-count):
+        radiusArray.SetTuple(i, [float(radius[i])])
+
 
     newVoronoi.SetPoints(points)
     newVoronoi.SetVerts(cellArray)
@@ -229,20 +238,20 @@ def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, in_out=None,
     return ReadPolyData(ofile)
 
 
-def CenterlineAttribiute(line, remove=True, filename=None, smooth=False,
+def CenterlineAttribiutes(line, remove=True, filename=None, smooth=False,
                          it=300, factor=0.1):
     if filename is None:
         filename = "tmp_cl.vtp"
-        WritePolyData(line, FileName)
+        WritePolyData(line, filename)
 
     command = ('vmtkcenterlineattributes -ifile %s --pipe vmtkcenterlinegeometry ' + \
                '-ofile %s') % (filename, filename)
     if smooth:
-        command += ' -smoothing 1 iterations %s -factor %s -outputsmoothd 1' %
+        command += ' -smoothing 1 iterations %s -factor %s -outputsmoothd 1' % \
                    (it, factor)
     else:
         command += ' -smoothing 0'
-    a = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+    a = check_output(command, stderr=STDOUT, shell=True)
     status, text = success(a)
 
     if not status:
@@ -250,9 +259,10 @@ def CenterlineAttribiute(line, remove=True, filename=None, smooth=False,
         print text
         sys.exit(0)
 
-    line = ReadPolyData(tmpFileName)
+    line = ReadPolyData(filename)
     if remove:
-        subprocess.check_output('rm ' + tmpFileName, stderr=subprocess.STDOUT, shell=True)
+        check_output('rm ' + filename, stderr=STDOUT, shell=True)
+
     return line
 
 
@@ -427,12 +437,12 @@ def ExtractSingleLine(centerlines, id, startID=0, endID=None):
     cell = vtk.vtkGenericCell()
     centerlines.GetCell(id, cell)
     N = cell.GetNumberOfPoints() if endID is None else endID + 1
-
+    
     line = vtk.vtkPolyData()
     cellArray = vtk.vtkCellArray()
     cellArray.InsertNextCell(N - startID)
     linePoints = vtk.vtkPoints() 
-
+    
     arrays = []
     N_, names = get_number_of_arrays(centerlines)
     for i in range(N_):
@@ -440,35 +450,37 @@ def ExtractSingleLine(centerlines, id, startID=0, endID=None):
         tmp_comp = tmp.GetNumberOfComponents()
         radiusArray = get_vtk_array(names[i], tmp_comp, N - startID)
         arrays.append(radiusArray)
-
+    
     getArray = []
     for i in range(N_):
         getArray.append(centerlines.GetPointData().GetArray(names[i]))
-
+   
+    count = 0
     for i in range(startID, N):
-        cellArray.InsertCellPoint(i)
+        cellArray.InsertCellPoint(count)
         linePoints.InsertNextPoint(cell.GetPoints().GetPoint(i))
+        
         for j in range(N_):
             num = getArray[j].GetNumberOfComponents()
             if num == 1:
-                tmp = getArray[j].GetTuple1(cell.GetPointId(i))
-                arrays[j].SetTuple1(i, tmp)
+                tmp = getArray[j].GetTuple1(i)
+                arrays[j].SetTuple1(count, tmp)
             elif num == 2:
-                tmp = getArray[j].GetTuple2(cell.GetPointId(i))
-                arrays[j].SetTuple2(i, tmp[0], tmp[1])
+                tmp = getArray[j].GetTuple2(i)
+                arrays[j].SetTuple2(count, tmp[0], tmp[1])
             elif num == 3:
-                tmp = getArray[j].GetTuple3(cell.GetPointId(i))
-                arrays[j].SetTuple3(i, tmp[0], tmp[1], tmp[2])
+                tmp = getArray[j].GetTuple3(i)
+                arrays[j].SetTuple3(count, tmp[0], tmp[1], tmp[2])
             elif num == 9:
-                tmp = getArray[j].GetTuple9(cell.GetPointId(i))
-                arrays[j].SetTuple9(i, tmp[0], tmp[1], tmp[2], tmp[3], tmp[4],
+                tmp = getArray[j].GetTuple9(i)
+                arrays[j].SetTuple9(count, tmp[0], tmp[1], tmp[2], tmp[3], tmp[4],
                                        tmp[5], tmp[6], tmp[7], tmp[8])
+        count += 1
 
     line.SetPoints(linePoints)
     line.SetLines(cellArray)
     for j in range(N_):
         line.GetPointData().AddArray(arrays[j])
-
     return line
 
 
@@ -486,6 +498,98 @@ def R(n, t):
                    n2*n3*(1 - cos(t)) + sin(t)*n1,  \
                    cos(t) + n3**2*(1 - cos(t))]])
     return r
+
+
+def getData(centerline, centerline_bif, tol):
+    # Declear variables before loop incase values are not found
+    diverging_point_ID = -1
+    diverging_point = [0.0, 0.0, 0.0]
+    diverging_point_MISR = -1
+
+    clipping_point_ID = -1
+    clipping_point = [0.0, 0.0, 0.0]
+    data = {"bif":{}, 0:{}, 1:{}}
+
+    # List of points conected to ID
+    points_ids_0 = vtk.vtkIdList()
+    points_ids_1 = vtk.vtkIdList()
+
+    # One is the branch to the left and the other is the one to the right
+    centerline.GetCellPoints(0, points_ids_0)
+    centerline.GetCellPoints(1, points_ids_1)
+
+    # Find lower clipping point
+    N = min(points_ids_0.GetNumberOfIds(), points_ids_1.GetNumberOfIds())
+    for i in range(0, N):
+        cell_point_0 = centerline.GetPoint(points_ids_0.GetId(i))
+        cell_point_1 = centerline.GetPoint(points_ids_1.GetId(i))
+        
+        distance_between_points = math.sqrt(distance(cell_point_0, cell_point_1))
+        if distance_between_points > tol:
+            tmpI = i
+            point_ID_0 = points_ids_0.GetId(i)
+            point_ID_1 = points_ids_1.GetId(i)
+            center = centerline.GetPoint(point_ID_0)
+            r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID_0)
+            break
+
+    end, r_end = move_past_sphere(centerline, center, r, point_ID_0, stop=point_ID_0*100, step=1)
+    data["bif"]["end_point"] = end
+    data["bif"]["r_end"] = r_end
+    data["bif"]["div_point"] = center
+    data["bif"]["ID_div"] = point_ID_0
+    data["bif"]["i_div"] = tmpI
+    data["bif"]["r_div"] = r
+
+    # Find the diverging point for anterior and midt bifurcation
+    # continue further downstream in each direction and stop when
+    # a point is closer than tol, than move point MISR * X
+    locator = get_locator(centerline_bif)
+
+    counter = 0
+    for point_ids in [points_ids_0, points_ids_1]:
+        for i in range(tmpI, point_ids.GetNumberOfIds(), 1):
+            tmp_point = centerline.GetPoint(point_ids.GetId(i))
+            closest_point_ID = locator.FindClosestPoint(tmp_point)
+            closest_point = centerline_bif.GetPoint(closest_point_ID)
+            distance_between_points = distance(tmp_point, closest_point)
+            if distance_between_points < tol:
+                point_ID = point_ids.GetId(i)
+                center = centerline.GetPoint(point_ID)
+                r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)
+                break
+        
+        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1.5)
+        data[counter]["end_point"] = end
+        data[counter]["r_end"] = r_end
+        data[counter]["r_div"] = r
+        data[counter]["ID_end"] = locator.FindClosestPoint(data[counter]["end_point"])
+        data[counter]["ID_div"] = locator.FindClosestPoint(center)
+        data[counter]["div_point"] = center
+        
+        counter += 1
+        
+    return data
+
+
+def move_past_sphere(centerline, center, r, start, step=-1, stop=0, X=0.8):
+    """Moves a point along the centerline until it as outside MIS"""
+    # Create the minimal inscribed sphere
+    MISphere = vtk.vtkSphere()
+    MISphere.SetCenter(center)
+    MISphere.SetRadius(r * X)
+    tempPoint = [0.0, 0.0, 0.0]
+
+    # Go the length of one MISR backwards
+    for i in range(start, stop, step):
+        value = MISphere.EvaluateFunction(centerline.GetPoint(i))
+        if (value>=0.0):
+            tempPoint = centerline.GetPoint(i)
+            break
+
+    r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
+    return tempPoint, r
+
 
 
 def viz(centerline, points):

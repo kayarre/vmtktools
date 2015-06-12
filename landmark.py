@@ -1,6 +1,5 @@
 from common import *
 from patchandinterpolatecenterlines import *
-from vmtkClassifyBifucation import getData
 import numpy as np
 from os import path, listdir
 from scipy.interpolate import splrep, splev
@@ -8,7 +7,7 @@ from scipy.signal import argrelextrema, gaussian
 import math
 
 
-def splineCenterline(line):
+def splineCenterline(line, nknots=25):
     # Allocate data structure to store centerline points
     data = np.zeros((line.GetNumberOfPoints(), 3))
 
@@ -17,7 +16,7 @@ def splineCenterline(line):
         curv_coor = get_curvilinear_coordinate(line)
         data[i,:] = line.GetPoints().GetPoint(i)
 
-    t = np.linspace(curv_coor[0], curv_coor[-1], 25)[1:-1]
+    t = np.linspace(curv_coor[0], curv_coor[-1], nknots)[1:-1]
     fx = splrep(curv_coor, data[:,0], k=4, t=t)
     fy = splrep(curv_coor, data[:,1], k=4, t=t)
     fz = splrep(curv_coor, data[:,2], k=4, t=t)
@@ -33,7 +32,7 @@ def splineCenterline(line):
 
     header = ["X", "Y", "Z"]
     line = data_to_vtkPolyData(data, header)
-
+    
     # Let vmtk compute curve attributes
     line = CenterlineAttribiutes(line)
 
@@ -56,7 +55,7 @@ def splineCenterline(line):
 
     max_point_ids = list(argrelextrema(curvature_, np.greater)[0])
     min_point_ids = list(argrelextrema(curvature_, np.less)[0])
-
+    
     # TODO: Replace the locator with curv_coor = length
     locator = get_locator(line)
 
@@ -112,6 +111,23 @@ def splineCenterline(line):
     torsion_array = create_vtk_array(torsion_spline, "Torsion")
     line.GetPointData().AddArray(torsion_array)
 
+    #from matplotlib.pyplot import plot, show, hold
+
+    #plot(length, curvature)
+    curvature_ = np.sqrt(C1xC2_1**2 + C1xC2_2**2 + C1xC2_3**2) / \
+                        (dlsfx**2 + dlsfy**2 + dlsfz**2)**1.5
+    curvature_[0] = curvature[0]
+    curvature_[-1] = curvature[-1]
+    #hold("on")
+    #plot(length, curvature_)
+    #show()
+    curvature_array = create_vtk_array(curvature_, "Curvature")
+    line.GetPointData().AddArray(curvature_array)
+
+    #curv = get_array("Curvature", line)
+    #plot(length, curv)
+    #show()
+    
     return line, max_point_ids, min_point_ids
 
 

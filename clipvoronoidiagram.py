@@ -129,7 +129,7 @@ def SmoothClippedVoronoiDiagram(voronoi, centerlines, smoothingFactor):
         point = voronoi.GetPoint(i)
         radius = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1(i)
         id = locator.FindClosestPoint(point)
-        if radius <= threshold[id]:
+        if radius >= threshold[id]:
             points.InsertNextPoint(point)
             cellArray.InsertNextCell(1)
             cellArray.InsertCellPoint(count)
