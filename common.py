@@ -83,7 +83,7 @@ def remove_distant_points(voronoi, centerline):
     locator = get_locator(centerline)
     get_data = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1
     limit = get_data(0)
-    limit = limit * 50
+    limit = limit * 10
 
     count = 0
     for i in range(N):
@@ -559,7 +559,7 @@ def getData(centerline, centerline_bif, tol):
                 r = centerline.GetPointData().GetArray(radiusArrayName).GetTuple1(point_ID)
                 break
         
-        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1.5)
+        end, r_end = move_past_sphere(centerline, center, r, point_ID, X=1)
         data[counter]["end_point"] = end
         data[counter]["r_end"] = r_end
         data[counter]["r_div"] = r

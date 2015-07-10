@@ -16,7 +16,7 @@ def splineCenterline(line, nknots=25):
         curv_coor = get_curvilinear_coordinate(line)
         data[i,:] = line.GetPoints().GetPoint(i)
 
-    t = np.linspace(curv_coor[0], curv_coor[-1], nknots)[1:-1]
+    t = np.linspace(curv_coor[0], curv_coor[-1], nknots+2)[1:-1]
     fx = splrep(curv_coor, data[:,0], k=4, t=t)
     fy = splrep(curv_coor, data[:,1], k=4, t=t)
     fz = splrep(curv_coor, data[:,2], k=4, t=t)

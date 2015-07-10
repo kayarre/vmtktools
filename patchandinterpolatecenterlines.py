@@ -27,7 +27,7 @@ def CreateParentArteryPatches(parentCenterlines, clipPoints):
         patchedCenterlinesPoints.InsertNextPoint(line.GetPoint(i))
         patchedCenterlinesCellArray.InsertCellPoint(i)
         radiusArray.SetTuple1(i, getData(i))
-        count+=1
+        count += 1
 
     for j in range(numberOfDaughterPatches):
         cell = ExtractSingleLine(parentCenterlines, j)
@@ -49,7 +49,7 @@ def CreateParentArteryPatches(parentCenterlines, clipPoints):
     patchedCenterlines.SetPoints(patchedCenterlinesPoints)
     patchedCenterlines.SetLines(patchedCenterlinesCellArray)
     patchedCenterlines.GetPointData().AddArray(radiusArray)
-    
+ 
     return patchedCenterlines
 
 

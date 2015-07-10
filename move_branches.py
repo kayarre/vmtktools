@@ -41,12 +41,15 @@ def read_command_line():
     parser.add_argument("--lower", type=bool, default=False,
                         help="Make a fourth line to interpolate along that" + \
                              " is lower than the other bif line.")
+    parser.add_argument("--cylinder_factor", type=float, default=7.0,
+                        help="Factor for choosing the smaller cylinder")
 
     args = parser.parse_args()
-    ang_ = math.pi/args.a
+    ang_ = 0 if args.a == 0 else math.pi/args.a
 
     return args.s, ang_, args.smooth_factor, args.leave1, args.leave2, \
-           args.bif, args.addPoint, args.d, args.case, args.lower
+           args.bif, args.addPoint, args.d, args.case, args.lower, \
+           args.cylinder_factor
 
 
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
@@ -226,8 +229,10 @@ def get_points(data, key, R, m, rotated=True, bif=False):
             div_points[i] = np.dot(np.dot(np.dot(div_points[i] - O, R), m_), R_inv) + O
 
     points = vtk.vtkPoints()
+
     for point in div_points[bif:]:
         points.InsertNextPoint(point)
+    
     return points, div_points[bif:]
 
 
@@ -236,7 +241,87 @@ def get_startpoint(centerline):
     return line.GetPoints().GetPoint(0)
 
 
-def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
+def merge_cl(centerline, end_point, div_point):
+    merge = vtk.vtkPolyData()
+    points = vtk.vtkPoints()
+    cellArray = vtk.vtkCellArray()
+    N_lines = centerline.GetNumberOfLines()
+
+    arrays = []
+    N_, names = get_number_of_arrays(centerline)
+    for i in range(N_):
+        tmp = centerline.GetPointData().GetArray(names[i])
+        tmp_comp = tmp.GetNumberOfComponents()
+        array = get_vtk_array(names[i], tmp_comp, centerline.GetNumberOfPoints())
+        arrays.append(array)
+
+    # Find lines to merge
+    lines = [ExtractSingleLine(centerline, i) for i in range(N_lines)]
+    locators = [get_locator(lines[i]) for i in range(N_lines)]
+    div_ID = [locators[i].FindClosestPoint(div_point[0]) for i in range(N_lines)]
+    end_ID = [locators[i].FindClosestPoint(end_point[0]) for i in range(N_lines)]
+    dist = [np.sum(lines[i].GetPoint(end_ID[i]) - end_point[0]) for i in range(N_lines)]
+    change = [j for j in range(N_lines) if dist[j] == 0]
+
+    # Find the direction of each line
+    map_other = {0: 1, 1: 0}
+    ID0 = locators[0].FindClosestPoint(end_point[1])
+    ID1 = locators[1].FindClosestPoint(end_point[1])
+    dist0 = math.sqrt(np.sum((np.asarray(lines[0].GetPoint(ID0)) - end_point[1])**2))
+    dist1 = math.sqrt(np.sum((np.asarray(lines[1].GetPoint(ID1)) - end_point[1])**2))
+    end1 = 0 if dist0 < dist1 else 1
+    end2 = int(not end1)
+    for i in range(2, N_lines):
+        ID1 = locators[i].FindClosestPoint(end_point[1])
+        ID2 = locators[i].FindClosestPoint(end_point[2])
+        dist1 = math.sqrt(np.sum((np.asarray(lines[i].GetPoint(ID1)) - end_point[1])**2))
+        dist2 = math.sqrt(np.sum((np.asarray(lines[i].GetPoint(ID2)) - end_point[2])**2))
+        map_other[i] = end1 if dist1 > dist2 else end2
+
+    counter = 0
+    for i in range(centerline.GetNumberOfLines()):
+        line = lines[i]
+        other = lines[map_other[i]]
+        N = line.GetNumberOfPoints()
+        cellArray.InsertNextCell(N)
+        
+        for j in range(N):
+            # Add point
+            if div_ID[i] < j < end_ID[i] and i in change:
+                new = (np.asarray(other.GetPoint(j)) +
+                    np.asarray(line.GetPoint(j))) / 2.
+                points.InsertNextPoint(new)
+            else:
+                points.InsertNextPoint(line.GetPoint(j))
+
+            cellArray.InsertCellPoint(counter)
+
+            # Add array
+            for k in range(N_):
+                num = arrays[k].GetNumberOfComponents()
+                if num == 1:
+                    tmp = line.GetPointData().GetArray(names[k]).GetTuple1(j)
+                    arrays[k].SetTuple1(counter, tmp)
+                elif num == 3:
+                    tmp = line.GetPointData().GetArray(names[k]).GetTuple3(j)
+                    arrays[k].SetTuple3(counter, tmp[0], tmp[1], tmp[2])
+                else:
+                    print "Add more options"
+                    sys.exit(0)
+
+            counter += 1
+
+    # Insert points, lines and arrays
+    merge.SetPoints(points)
+    merge.SetLines(cellArray)
+    for i in range(N_):
+        merge.GetPointData().AddArray(arrays[i])
+    
+    return merge
+
+
+def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
+         cylinder_factor):
     # Input filenames
     model_path = path.join(dirpath, "surface", "model.vtp")
 
@@ -256,13 +341,16 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
     voronoi_smoothed_path = path.join(dirpath, "surface", "voronoi_smoothed.vtp")
     voronoi_clipped_path = path.join(dirpath, "surface", "voronoi_clipped.vtp")
     voronoi_rotated_path = path.join(dirpath, "surface", "voronoi_rotated.vtp")
-    s = "_pi%s" % (1/(angle/math.pi))
+    voronoi_angle_path = path.join(dirpath, "surface", "voronoi_angle.vtp")
+
+    s = "_pi%s" % angle if angle == 0 else "_pi%s" % (1/(angle/math.pi))
     s += "" if not l1 else "_l1"
     s += "" if not l2 else "_l2"
     s += "" if not bif else "_bif"
     s += "" if not smooth else "_smooth"
     s += "" if not addPoint else "_extraPoint"
     s += "" if not lower else "_lower"
+    s += "" if cylinder_factor == 7.0 else "_cyl%s" % cylinder_factor
     model_new_surface = path.join(dirpath, "surface", "model_angle"+s+".vtp")
 
     # Model
@@ -297,11 +385,12 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
     data = getData(centerline, centerline_bif, divergingTolerance)
     R, m = rotationMatrix(data, angle, l1, l2) 
 
+    # divpoints or endpoints, rotated or not, and for bif or not
     key = "div_point"
     div_points_rotated_bif = get_points(data, key, R, m, rotated=True, bif=True)
     div_points_rotated = get_points(data, key, R, m, rotated=True, bif=False)
     div_points = get_points(data, key, R, m, rotated=False, bif=False)
-    
+
     key = "end_point"
     end_points_bif = get_points(data, key, R, m, rotated=False, bif=True)
     end_points = get_points(data, key, R, m, rotated=False, bif=False)
@@ -331,8 +420,6 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
     
     # Interpolate the centerline
     print "Interpolate centerlines and voronoi diagram."
-    addPoint_ = False
-    lower_ = [False]
     interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline,
                                                   end_points_rotated[0],
                                                   div_points_rotated[0],
@@ -340,18 +427,23 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
     interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
                                                    end_points_rotated_bif[0],
                                                    div_points_rotated_bif[0],
-                                                   False,)
+                                                   False)
+
     if lower:
-        print "Interpolate the lower thing"
         center = np.sum(div_points[1], axis=0)/3.
         div_points_rotated_bif[0].SetPoint(0, center[0], center[1], center[2])
         interpolated_bif_lower = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
                                                        end_points_rotated_bif[0],
                                                        div_points_rotated_bif[0],
-                                                       addPoint)
+                                                       lower)
         WritePolyData(interpolated_bif_lower, centerline_new_bif_lower_path)
     WritePolyData(interpolated_cl, centerline_new_path)
     WritePolyData(interpolated_bif, centerline_new_bif_path)
+
+    WritePolyData(interpolated_cl, "before_merge.vtp")
+    interpolated_cl = merge_cl(interpolated_cl, div_points_rotated[1],
+                               end_points_rotated[1])
+    WritePolyData(interpolated_cl, "after_merge.vtp")
 
     # Interpolate voronoi diagram
     if lower and bif:
@@ -360,13 +452,15 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
         bif = [interpolated_bif, rotated_bif] if bif else None
     elif lower:
         bif = [interpolated_bif_lower, rotated_bif] if lower else None
+    else:
+        bif = []
 
     interpolated_voronoi = interpolate_voronoi_diagram(interpolated_cl, rotated_cl, 
                                                        rotated_voronoi,
                                                        end_points_rotated[0],
-                                                       bif, lower)
-    new_surface = create_new_surface(interpolated_voronoi)
+                                                       bif, lower, cylinder_factor)
     interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
+    WritePolyData(interpolated_voronoi, voronoi_angle_path) 
 
     # Write a new surface from the new voronoi diagram
     print "Write new surface"
@@ -375,9 +469,10 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower):
 
 
 if  __name__ == "__main__":
-    smooth, angle, smooth_factor, l1, l2, bif, addPoint, basedir, case, lower = read_command_line()
+    smooth, angle, smooth_factor, l1, l2, bif, addPoint, basedir, case, lower, \
+    cylinder_factor = read_command_line()
     folders = listdir(basedir) if case is None else [case]
     for folder in folders:
         if folder[:2] in ["P0", "C0"]:
             main(path.join(basedir, folder), smooth, smooth_factor, angle, l1,
-                  l2, bif, addPoint, lower)
+                  l2, bif, addPoint, lower, cylinder_factor)
