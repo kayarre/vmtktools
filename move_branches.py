@@ -8,6 +8,7 @@ from os import path, listdir
 from subprocess import STDOUT, check_output
 import sys
 import math
+from time import time
 
 
 def read_command_line():
@@ -428,9 +429,11 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
                                                    end_points_rotated_bif[0],
                                                    div_points_rotated_bif[0],
                                                    False)
-
     if lower:
-        center = np.sum(div_points[1], axis=0)/3.
+        #center = np.sum(div_points[1], axis=0)/3.
+        # Skewed center
+        center = (1/9.)*div_points[1][0] + (4/9.)*div_points[1][1] + \
+                        (4/9.)*div_points[1][2]
         div_points_rotated_bif[0].SetPoint(0, center[0], center[1], center[2])
         interpolated_bif_lower = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
                                                        end_points_rotated_bif[0],
@@ -440,10 +443,8 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
     WritePolyData(interpolated_cl, centerline_new_path)
     WritePolyData(interpolated_bif, centerline_new_bif_path)
 
-    WritePolyData(interpolated_cl, "before_merge.vtp")
     interpolated_cl = merge_cl(interpolated_cl, div_points_rotated[1],
                                end_points_rotated[1])
-    WritePolyData(interpolated_cl, "after_merge.vtp")
 
     # Interpolate voronoi diagram
     if lower and bif:

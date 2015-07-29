@@ -47,8 +47,7 @@ def start_case(casepath, folder):
    
     # Untar
     if not path.isdir(folder_):
-        check_output("cd %s" % casepath, stderr=STDOUT, shell=True)
-        check_output("tar -xvf %s" % folder, stderr=STDOUT, shell=True)
+        check_output("bash untar.sh %s %s" % (casepath, folder), stderr=STDOUT, shell=True)
         check_output("cd -", stderr=STDOUT, shell=True)
 
     # Convert case info to plain text

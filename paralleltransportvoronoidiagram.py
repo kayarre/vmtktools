@@ -505,11 +505,7 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                     clippingPoints)
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                     newVoronoiPointsMISR)
-        WritePolyData(completeVoronoiDiagram, "voronoi%s_1.vtp" % j)
         voronoi_test = make_new_voronoi(newVoronoiPoints, newVoronoiPointsMISR)
-        surf = create_new_surface(voronoi_test)
-        WritePolyData(surf, "surf.vtp")
-        sys.exit(0)
         
         newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId, 
                                                     endId, startId, endInterpolationDataset, 
@@ -518,7 +514,6 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                     clippingPoints)
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                     newVoronoiPointsMISR)
-        WritePolyData(completeVoronoiDiagram, "voronoi%s_2.vtp" % j)
 
     
     if bif is not None:
@@ -573,8 +568,6 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
             completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                         newVoronoiPointsMISR)
 
-            WritePolyData(completeVoronoiDiagram, "voronoi_bif_%s_1.vtp" % i)
-
             newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId, 
                                                         2, 1, endInterpolationDataset, 
                                                         startHalfInterpolationDataset, 
@@ -588,6 +581,5 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
             completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                             newVoronoiPointsMISR)
 
-            WritePolyData(completeVoronoiDiagram, "voronoi_bif_%s_2.vtp" % i)
 
     return completeVoronoiDiagram
