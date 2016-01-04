@@ -6,6 +6,7 @@ from paralleltransportvoronoidiagram import *
 from scipy.interpolate import splrep, splev
 from os import path, listdir
 import numpy as np
+import math
 from scipy.ndimage.filters import gaussian_filter
 from scipy.signal import argrelextrema
 
@@ -17,16 +18,36 @@ def read_command_line():
     parser.add_argument('--dir_path', type=str, default=".", help="Path")
     parser.add_argument('--s', '--smooth', type=bool, default=False,
                         help="If the original voronoi diagram", metavar="smooth")
-    parser.add_argument('--beta', type=float, default=1.5, 
+    parser.add_argument('--beta', type=float, default=0.5, 
             help="The new voronoi diagram is computed as (A/mean)**beta*r_old," + \
             " over the respective area. If beta < -1 the geometry will be more even, and" + \
             " if beta > 1, the differences in the geometry will be larger")
+    parser.add_argument("--stop", type=bool, default=False)
+    parser.add_argument("--ratio", type=float, default=None, help="Wanted ratio" + \
+                       " A_max/A_min, when this is given beta will be ignored" + \
+                       " and beta computed such that this will (approxematly)" + \
+                       " be the result")
     parser.add_argument("--stats", type=bool, default=False,
                         help="Collect stats")
 
     args = parser.parse_args()
 
-    return args.s, args.beta, args.stats, args.dir_path, args.case
+
+    if args.ratio is not None and args.beta != 0.5:
+        print "WARNING: The beta value you gave will be ignored"
+
+    if args.ratio is not None:
+        if not path.isfile(path.join(args.dir_path, args.case, "manifest.txt")):
+            print "Error: There need to be a manifest.txt to use --ratio"
+            sys.exit(0)
+        parameters = getParameters(path.join(args.dir_path, args.case))
+        if not parameters.has_key("max_min_ratio_area"):
+            print "Error: Run area_variation with the flag --stats True first."
+            sys.exit(0)
+        old = parameters["max_min_ratio_area"]
+        args.beta = 0.5 * math.log(args.ratio / old) / math.log(old)
+
+    return args.s, args.beta, args.stats, args.dir_path, args.case, args.stop
 
 
 def move_past_sphere(centerline, i):
@@ -77,8 +98,6 @@ def splineCenterline(line, knots):
 
 
 def get_stats(centerline_area, folder, centerline):
-    WritePolyData(centerline_area, "test_area.vtp")
-
     area = get_array("CenterlineSectionArea", centerline_area)
     MISR_ = get_array(radiusArrayName, centerline)**2*math.pi
     MISR = np.array([MISR_[i] for i in range(MISR_.shape[0] - 1, -1, -1)])[:area.shape[0]]
@@ -155,6 +174,7 @@ def get_stats(centerline_area, folder, centerline):
     darea_dx = splev(length, spline_area, der=1)
     max_derivative = abs(darea_dx).max()
 
+    #print "max_min_ratio_area:", global_max_area / global_min_area
     stats = {"max_derivative": max_derivative,
              "local_max_stepest_disent": local_max_stepest_disent,
              "max_mean_ratio_area": max_mean_ratio_area,
@@ -169,27 +189,21 @@ def get_stats(centerline_area, folder, centerline):
              "mean_circleness": mean_circleness,
              "number_of_max": number_of_max}
 
-
     writeParameters(stats, folder)
+    
+    return length, area
 
 
-def get_lineToChange(centerline, tol, type):
+def get_lineToChange(centerline, tol, stop):
     # NEW: Choose the lowest bif, this could either be something in the siphon,
     # the aneurism or ICA terminus.
-    # OLD: Check type of case and choose end point of siphon. If it is a normal case
-    # or has a terminal aneurism, use ICA terminus as end point. If it is a
-    # leteral case, use the aneurism as endpoint.
-
-    #if type is None or type == "terminal":
-    #    split = 1
-    #elif type == "LAT":
-    #    split = centerline.GetNumberOfLines() - 1
-
+   
     line2 = ExtractSingleLine(centerline, 0)
     numberOfPoints2 = line2.GetNumberOfPoints()
 
+    n = centerline.GetNumberOfCells() if not stop else 2
     pointIDs = []
-    for j in range(1, centerline.GetNumberOfCells()):
+    for j in range(1, n):
         line1 = ExtractSingleLine(centerline, j)
         numberOfPoints1 = line1.GetNumberOfPoints()
 
@@ -201,7 +215,7 @@ def get_lineToChange(centerline, tol, type):
                 pointID = i
                 break
 
-        pointIDs.append(move_past_sphere(line2, pointID))
+        pointIDs.append(pointID)#move_past_sphere(line2, pointID))
 
     pointID = min(pointIDs)
     lineToChange = ExtractSingleLine(centerline, 0, endID=pointID)
@@ -209,11 +223,12 @@ def get_lineToChange(centerline, tol, type):
     return lineToChange
 
 
-def change_area(voronoi, lineToChange, tol, beta, type):
-    # NEW: Check if voronoi point is within 2*MISR of centerline.
+def change_area(voronoi, lineToChange, tol, beta):
+    # NEW: Check if voronoi point is within 1.5*MISR of centerline.
     #      So, this means change MISR of lineToChange, due to extreme
     #      circleness
     # OLD: Tube function to evaluate if the voronoi point should be changed
+
     arrayForTube = get_vtk_array("TubeRadius", 1, lineToChange.GetNumberOfPoints())
     MISR = get_array(radiusArrayName, lineToChange)*1.5
     for i in range(MISR.shape[0]):
@@ -243,8 +258,8 @@ def change_area(voronoi, lineToChange, tol, beta, type):
 
     # A linear transition of the old and new geometry
     k = round(factor_.shape[0] * 0.10, 0)
-    l = factor_.shape[0] - k
-    trans = np.asarray(np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
+    l = factor_.shape[0] - k*2
+    trans = np.asarray(np.linspace(1, 0, k).tolist() + np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
     factor = factor_[:,0]*(1-trans) + trans
     one = np.zeros(factor_.shape[0]) + 1
 
@@ -270,7 +285,7 @@ def change_area(voronoi, lineToChange, tol, beta, type):
         vectorValue = vtk.vtkMath.Dot(voronoiVector, t)
 
         if (tubeValue <= 0.0) and not ((sphereValue < 0.0) and (vectorValue < 0.0)):
-            # FIXME: Move point or project vector down in to prependicular
+            # TODO: Move point or project vector down in to prependicular
             # plane, or find vector from spline for continous evaluation
             tmp_ID = locator.FindClosestPoint(point)
             v1 = np.asarray(lineToChange.GetPoint(tmp_ID)) - np.asarray(point)
@@ -292,7 +307,7 @@ def change_area(voronoi, lineToChange, tol, beta, type):
     return newVoronoi
 
 
-def main(folder, beta, smooth, stats):
+def main(folder, beta, smooth, stats, stop):
     # Naming convention
     model_path = path.join(folder, "surface", "model.vtp")
     model_smoothed_path = path.join(folder, "surface", "model_smoothed.vtp")
@@ -308,6 +323,7 @@ def main(folder, beta, smooth, stats):
     # Smooth voronoi diagram
     centerlines = makeCenterline(model_path, centerlines_path, length=0.1,
             smooth=False)
+    
     voronoi = makeVoronoi(model_path, voronoi_path)
     if not path.exists(voronoi_smoothed_path) and smooth:
         voronoi_smoothed = SmoothClippedVoronoiDiagram(voronoi, centerlines, 0.25)
@@ -328,11 +344,9 @@ def main(folder, beta, smooth, stats):
                                 centerlines.GetPoint(11)))
     tol = centerlineSpacing / divergingRatioToSpacingTolerance
 
-    # Get line to change
-    type_ = getParameters(folder)["aneurysmType"]
 
     if not path.exists(centerline_area_spline_path):
-        centerline_to_change = get_lineToChange(centerlines, tol, type_)
+        centerline_to_change = get_lineToChange(centerlines, tol, stop)
         WritePolyData(centerline_to_change, centerline_area_spline_path)
         
         centerline_splined = splineCenterline(centerline_to_change, 20)
@@ -344,23 +358,70 @@ def main(folder, beta, smooth, stats):
         centerline_area = ReadPolyData(centerline_area_spline_path)
 
     # Compute stats
+    area = None
+    length = None
     if stats:
-        get_stats(centerline_area, folder, centerlines)
+        length, area = get_stats(centerline_area, folder, centerlines)
     else:
         # Change and compute the new voronoi diagram
-        newvoronoi = change_area(voronoi, centerline_area, tol, beta, type_)
-        WritePolyData(newvoronoi, voronoi_new_path) 
+        newvoronoi = change_area(voronoi, centerline_area, tol, beta)
+        WritePolyData(newvoronoi, voronoi_new_path)
 
         # Make new surface
         surface_smoothed = create_new_surface(newvoronoi)
         WritePolyData(surface_smoothed, model_area_path)
 
+    return length, area
+
 
 if __name__ == '__main__':
-    smooth, beta, stats, basefolder, case = read_command_line()
+    smooth, beta, stats, basefolder, case, stop = read_command_line()
+    #folders = []
     folders = listdir(basefolder) if case is None else [case]
-    for folder in folders:
-        if (folder.startswith("C0") or folder.startswith("P0")) and not ".png" in folder:
-            print folder
+    #folders = folders + listdir(path.join(basefolder, "new_cases"))
+    #folders = ["N0123", "N0124", "N0125", "N0132"]
+    folders = ["A0026", "A0027"]
+    color = ["r", "k", "b"]
+    #label = {"N0123": "Orginal", "N0124": "-1 SD", "N0125": "+1 SD", "N0132": "+2 SD"}
+    from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
+                                 xlabel, ylabel, tight_layout, axis, subplot, \
+                                 tick_params
+
+    #ax = subplot(111)
+    f = figure(figsize=(4.6, 10))
+    #ax.set_figure(f)
+    for i, folder in enumerate(folders):
+        if folder.startswith("A0"): #or folder.startswith("P0")) and \
+          #not ".png" in folder or folder.startswith("N0"):
+            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
+            #if folder in ["C0087", "C0093"]:
+            #    continue
+            print "Working on:", folder
             case = path.join(basefolder, folder)
-            main(case, beta, smooth, stats)
+            length, a = main(case, beta, smooth, stats, stop)
+            f = plot(a, length, label=folder, linewidth=3, color=color[i])
+            #legend()
+            hold("on")
+    xlabel("Area")
+    #ax.spines['right'].set_visible(False)
+    #ax.spines['top'].set_visible(False)
+    #ax.xaxis.set_ticks_position('bottom')
+    #ax.yaxis.set_ticks_position('left')
+    #ax.spines['left'].set_visible(False)
+
+    tick_params(
+        axis='y',          # changes apply to the y-axis
+        which='both',      # both major and minor ticks are affected
+        left='off',      # ticks along the bottom edge are off
+        right='off',         # ticks along the top edge are off
+        labelleft='off') # labels along the bottom edge are off
+
+    tick_params(
+        axis='y',          # changes apply to the y-axis
+        which='both',      # both major and minor ticks are affected
+        top='off')      # ticks
+    #ylabel("Length")
+    #axis('off')
+    tight_layout()
+    savefig("area_variations_%s.png" % folder, pad_inches=0)
+    #show()

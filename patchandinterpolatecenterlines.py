@@ -2,10 +2,11 @@
 
 from common import *
 import vtk
+from scipy.interpolate import splrep, splev
 import sys
 import math
 from vmtk import vtkvmtk
-
+import numpy as np
 
 def CreateParentArteryPatches(parentCenterlines, clipPoints):
     numberOfDaughterPatches = parentCenterlines.GetNumberOfCells()
@@ -98,20 +99,15 @@ def ExtractPatchesIds(parentCl, clipPts):
 
 
 def InterpolatePatchCenterlines(patchCenterlines, parentCenterlines,
-                                clippingPoints, divergingPoints, addPoint):
-    additionalPoint = [-1.0, -1.0, -1.0]
-    additionalPointIds = [] 
-
-    if addPoint:
-        additionalPoint = divergingPoints.GetPoint(0)
+                                additionalPoint, lower, version):
+   
+    if additionalPoint is not None:
+        additionalPointIds = []
         for i in range(parentCenterlines.GetNumberOfCells()):
             line = ExtractSingleLine(parentCenterlines, i)
             additionalPointIds.append(line.FindPoint(additionalPoint))
     else:
-        additionalPoint = clippingPoints.GetPoint(0)
-        for i in range(parentCenterlines.GetNumberOfCells()):	   
-            line = ExtractSingleLine(parentCenterlines, 0)
-            additionalPointIds.append(line.FindPoint(additionalPoint)) 
+        additionalPointIds = ["" for i in range(parentCenterlines.GetNumberOfCells())]
   
     interpolatedLines = vtk.vtkPolyData()
     interpolatedPoints = vtk.vtkPoints()
@@ -129,16 +125,25 @@ def InterpolatePatchCenterlines(patchCenterlines, parentCenterlines,
         patchCenterlines.GetCell(0, startingCell)
         patchCenterlines.GetCell(i+1, endingCell)
     
-        splinePoints = InterpolateTwoCells(startingCell, endingCell, \
-                                            numberOfInterpolationPoints, \
-                                            additionalPointIds[i],
-                                            additionalPoint, addPoint)
+        if version:
+            splinePoints = InterpolateSpline(startingCell, endingCell, additionalPoint)
+        else:
+            splinePoints = InterpolateTwoCells(startingCell, endingCell, \
+                                               numberOfInterpolationPoints, \
+                                               additionalPointIds[i],
+                                               additionalPoint, lower)
 
         interpolatedCellArray.InsertNextCell(splinePoints.GetNumberOfPoints())
         for j in range(splinePoints.GetNumberOfPoints()):
             interpolatedPoints.InsertNextPoint(splinePoints.GetPoint(j))
             interpolatedCellArray.InsertCellPoint(pointsInserted + j)
         pointsInserted += splinePoints.GetNumberOfPoints()
+
+        #tmpLines = vtk.vtkPolyData()
+        #tmpLines.SetPoints(interpolatedPoints)
+        #tmpLines.SetLines(interpolatedCellArray)
+        #viz(tmpLines)
+
 
     interpolatedLines.SetPoints(interpolatedPoints)
     interpolatedLines.SetLines(interpolatedCellArray)
@@ -154,8 +159,75 @@ def InterpolatePatchCenterlines(patchCenterlines, parentCenterlines,
     return attributeInterpolatedLines
 
 
+def InterpolateSpline(startCell, endCell, additionalPoint):
+
+    # If the centerline does not pass the bifurcation, return the centerline
+    if startCell.GetPoints().GetPoint(0) == endCell.GetPoints().GetPoint(0):
+        return endCell.GetPoints()
+
+    # Get number of cells
+    points = []
+    num_start = startCell.GetNumberOfPoints()
+    num_end = endCell.GetNumberOfPoints()
+    get_startCell = startCell.GetPoints()
+    get_endCell = endCell.GetPoints()
+
+    points = []
+    n = 5
+    N = 100
+    num_centerline_points = 3
+    
+    for i in range(num_centerline_points -1, -1, -1):
+        points.append(get_startCell.GetPoint(num_start - n*i - 1))
+    
+    if additionalPoint is not None:
+        points.append(additionalPoint)
+
+    for i in range(num_centerline_points):
+        points.append(get_endCell.GetPoint(i*n))
+
+    curv_coor = np.zeros(len(points))
+    for i in range(len(points)-1):
+        curv_coor[i+1] = curv_coor[i] + math.sqrt(distance(points[i], points[i+1]))
+
+    # Increse the longest distances
+    #base_line = curv_coor[0]
+    #for i, c in enumerate(curv_coor):
+    #    if c > 5*base_line:
+    #        print "Making distance longer, prev:", c, "  new:", 1.2*c
+    #        curv_coor[i] = c*1.2
+
+    points = np.asarray(points)
+    
+    fx = splrep(curv_coor, points[:,0], k=3)
+    fy = splrep(curv_coor, points[:,1], k=3)
+    fz = splrep(curv_coor, points[:,2], k=3)
+
+    curv_coor = np.linspace(curv_coor[0], curv_coor[-1], N)
+    fx_ = splev(curv_coor, fx)
+    fy_ = splev(curv_coor, fy)
+    fz_ = splev(curv_coor, fz)
+
+    tmp = []
+    for i in range(num_start - n*num_centerline_points):
+        tmp.append(get_startCell.GetPoint(i))
+
+    for j in range(N):
+        tmp.append([fx_[j], fy_[j], fz_[j]])
+
+    for k in range(n*num_centerline_points, num_end):
+        tmp.append(get_endCell.GetPoint(k))
+
+    points = vtk.vtkPoints()
+    points.SetNumberOfPoints(len(tmp))
+    for l in range(len(tmp)):
+        points.SetPoint(l, tmp[l])
+
+    return points
+    
+
 def InterpolateTwoCells(startCell, endCell, numberOfSplinePoints, additionalPointId,
-                        additionalPoint, addPoint):
+                        additionalPoint, type):
     points = vtk.vtkPoints()
     xspline = vtk.vtkCardinalSpline()
     yspline = vtk.vtkCardinalSpline()
@@ -164,25 +236,25 @@ def InterpolateTwoCells(startCell, endCell, numberOfSplinePoints, additionalPoin
     numberOfStartCellPoints = startCell.GetNumberOfPoints()
     numberOfEndCellPoints = endCell.GetNumberOfPoints()
     endCellFirstId = numberOfSplinePoints - numberOfEndCellPoints
-    numberOfClippedCenterlinePoints = numberOfStartCellPoints + numberOfEndCellPoints
 
     for i in range(numberOfStartCellPoints):
         point = startCell.GetPoints().GetPoint(i)
-        xspline.AddPoint(float(i),point[0])
-        yspline.AddPoint(float(i),point[1])
-        zspline.AddPoint(float(i),point[2])
+        xspline.AddPoint(float(i), point[0])
+        yspline.AddPoint(float(i), point[1])
+        zspline.AddPoint(float(i), point[2])
 
-    if addPoint:
+    if additionalPoint is not None:
         xspline.AddPoint(float(additionalPointId), additionalPoint[0])
         yspline.AddPoint(float(additionalPointId), additionalPoint[1])
         zspline.AddPoint(float(additionalPointId), additionalPoint[2])
 
     for i in range(numberOfEndCellPoints):
         point = endCell.GetPoints().GetPoint(i)
-        index = endCellFirstId+i
-        xspline.AddPoint(float(endCellFirstId + i),point[0])
-        yspline.AddPoint(float(endCellFirstId + i),point[1])
-        zspline.AddPoint(float(endCellFirstId + i),point[2])
+        index = float(endCellFirstId + i)
+        xspline.AddPoint(index, point[0])
+        yspline.AddPoint(index, point[1])
+        zspline.AddPoint(index, point[2])
+
     xspline.Compute()
     yspline.Compute()  
     zspline.Compute()

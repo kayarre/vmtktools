@@ -91,8 +91,9 @@ def remove_distant_points(voronoi, centerline):
         ID = locator.FindClosestPoint(point)
         cl_point = centerline.GetPoint(ID)
         dist = math.sqrt(distance(point, cl_point))
-        
-        if dist/3 > get_data(i) or get_data(i) > limit:
+        comp = (47.424041748046875, 43.039527893066406, 41.241416931152344)
+        if get_data(i) > 1.7 and math.sqrt(distance(point, comp)) < 0.2:#dist/3 > get_data(i) or get_data(i) > limit:
+            print point
             count += 1
             continue
 
@@ -150,7 +151,7 @@ def makeCenterlineSections(isurface, ifile, ofile, recompute=False):
 def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, in_out=None,
                    smooth=True, resampling=True, recompute=False):
     """A general centerline command. If a centerline file with the same file
-    name alread exists, then the file i just read. To overwrite this set
+    name alread exists, then the file is just read. To overwrite this set
     recompute to True. If recomputed is to True then it uses the exsisting points
     from the old centerline file and no interaction with the interface is
     needed. Further on one can choose witch points you want to include by
@@ -226,8 +227,6 @@ def makeCenterline(ifile, ofile, length=1, it=100, factor=0.1, in_out=None,
         # If the points are not already storted, do it now
         if store_points:
             centerline = ReadPolyData(ofile)
-            end_points = []
-            start_point = []
             for i in range(centerline.GetNumberOfLines()):
                 tmp_line = ExtractSingleLine(centerline, i)
                 tmp_N = tmp_line.GetNumberOfPoints()
@@ -541,13 +540,12 @@ def getData(centerline, centerline_bif, tol):
     data["bif"]["i_div"] = tmpI
     data["bif"]["r_div"] = r
 
-    # Find the diverging point for anterior and midt bifurcation
+    # Find the diverging points for the bifurcation
     # continue further downstream in each direction and stop when
-    # a point is closer than tol, than move point MISR * X
+    # a point is closer than tol, then move point MISR * X
     locator = get_locator(centerline_bif)
 
-    counter = 0
-    for point_ids in [points_ids_0, points_ids_1]:
+    for counter, point_ids in enumerate([points_ids_0, points_ids_1]):
         for i in range(tmpI, point_ids.GetNumberOfIds(), 1):
             tmp_point = centerline.GetPoint(point_ids.GetId(i))
             closest_point_ID = locator.FindClosestPoint(tmp_point)
@@ -566,8 +564,6 @@ def getData(centerline, centerline_bif, tol):
         data[counter]["ID_end"] = locator.FindClosestPoint(data[counter]["end_point"])
         data[counter]["ID_div"] = locator.FindClosestPoint(center)
         data[counter]["div_point"] = center
-        
-        counter += 1
         
     return data
 
@@ -592,7 +588,7 @@ def move_past_sphere(centerline, center, r, start, step=-1, stop=0, X=0.8):
 
 
 
-def viz(centerline, points):
+def viz(centerline, points=None):
     """Help method during development to view the results"""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -615,10 +611,11 @@ def viz(centerline, points):
         plt.hold("on")
     
     counter = 0
-    for p in points:
-        ax.plot([float(p[0])], [float(p[1])], [float(p[2])], "o", label=N+counter)
-        ax.legend()
-        plt.hold("on")
-        counter += 1
+    if points is not None:
+        for p in points:
+            ax.plot([float(p[0])], [float(p[1])], [float(p[2])], "o", label=N+counter)
+            ax.legend()
+            plt.hold("on")
+            counter += 1
     
     plt.show()

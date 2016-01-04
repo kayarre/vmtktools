@@ -37,6 +37,10 @@ def read_command_line():
                         help="Leave one branch untuched")
     parser.add_argument("--bif", type=bool, default=False, 
                         help="interpolate bif as well")
+    parser.add_argument("--w", type=bool, default=False, help="Use the weighted" + \
+                        "center")
+    parser.add_argument("--version", type=bool, default=True, help="Type of" + \
+                        "interpolation")
     parser.add_argument("--addPoint", type=bool, default=False,
                         help="Add additional point for integration")
     parser.add_argument("--lower", type=bool, default=False,
@@ -50,7 +54,7 @@ def read_command_line():
 
     return args.s, ang_, args.smooth_factor, args.leave1, args.leave2, \
            args.bif, args.addPoint, args.d, args.case, args.lower, \
-           args.cylinder_factor
+           args.cylinder_factor, args.w, args.version
 
 
 def rotate_voronoi(clipped_voronoi, patch_cl, div_points, m, R):
@@ -206,11 +210,11 @@ def rotationMatrix(data, angle, leave1, leave2):
         m = {1: m2, 2: m1}
 
     if leave1:
-        k = 1 if data[0][r_end] > data[1][r_end] else 2
-        m[2] = I
+        k = 1 if data[0]["r_end"] > data[1]["r_end"] else 2
+        m[k] = I
     if leave2:
-        k = 1 if data[0][r_end] < data[1][r_end] else 2
-        m[2] = I
+        k = 1 if data[0]["r_end"] < data[1]["r_end"] else 2
+        m[k] = I
 
     return R, m
 
@@ -322,7 +326,7 @@ def merge_cl(centerline, end_point, div_point):
 
 
 def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
-         cylinder_factor):
+         cylinder_factor, w, version):
     # Input filenames
     model_path = path.join(dirpath, "surface", "model.vtp")
 
@@ -422,37 +426,38 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
     # Interpolate the centerline
     print "Interpolate centerlines and voronoi diagram."
     interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline,
-                                                  end_points_rotated[0],
-                                                  div_points_rotated[0],
-                                                  addPoint)
-    interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
-                                                   end_points_rotated_bif[0],
-                                                   div_points_rotated_bif[0],
-                                                   False)
+                                                  div_points_rotated[0].GetPoint(0),
+                                                  None, version)
+
+    if bif:
+        interpolated_bif = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
+                                                        None, "bif", True)
+        WritePolyData(interpolated_bif, centerline_new_bif_path)
+
     if lower:
-        #center = np.sum(div_points[1], axis=0)/3.
-        # Skewed center
-        center = (1/9.)*div_points[1][0] + (4/9.)*div_points[1][1] + \
-                        (4/9.)*div_points[1][2]
+        if not w:
+            center = np.sum(div_points[1], axis=0)/3.
+        else:
+            # Skewed center
+            center = (1/9.)*div_points[1][0] + (4/9.)*div_points[1][1] + \
+                     (4/9.)*div_points[1][2]
         div_points_rotated_bif[0].SetPoint(0, center[0], center[1], center[2])
         interpolated_bif_lower = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
-                                                       end_points_rotated_bif[0],
-                                                       div_points_rotated_bif[0],
-                                                       lower)
+                                                             div_points_rotated_bif[0].GetPoint(0),
+                                                             "lower", True)
         WritePolyData(interpolated_bif_lower, centerline_new_bif_lower_path)
-    WritePolyData(interpolated_cl, centerline_new_path)
-    WritePolyData(interpolated_bif, centerline_new_bif_path)
 
     interpolated_cl = merge_cl(interpolated_cl, div_points_rotated[1],
                                end_points_rotated[1])
-
+    WritePolyData(interpolated_cl, centerline_new_path)
+    
     # Interpolate voronoi diagram
     if lower and bif:
         bif = [interpolated_bif, interpolated_bif_lower, rotated_bif]
     elif bif:
-        bif = [interpolated_bif, rotated_bif] if bif else None
+        bif = [interpolated_bif, rotated_bif]
     elif lower:
-        bif = [interpolated_bif_lower, rotated_bif] if lower else None
+        bif = [interpolated_bif_lower, rotated_bif]
     else:
         bif = []
 
@@ -461,6 +466,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
                                                        end_points_rotated[0],
                                                        bif, lower, cylinder_factor)
     interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
+
     WritePolyData(interpolated_voronoi, voronoi_angle_path) 
 
     # Write a new surface from the new voronoi diagram
@@ -471,9 +477,9 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
 
 if  __name__ == "__main__":
     smooth, angle, smooth_factor, l1, l2, bif, addPoint, basedir, case, lower, \
-    cylinder_factor = read_command_line()
+    cylinder_factor, w, version = read_command_line()
     folders = listdir(basedir) if case is None else [case]
     for folder in folders:
         if folder[:2] in ["P0", "C0"]:
             main(path.join(basedir, folder), smooth, smooth_factor, angle, l1,
-                  l2, bif, addPoint, lower, cylinder_factor)
+                  l2, bif, addPoint, lower, cylinder_factor, w, version)

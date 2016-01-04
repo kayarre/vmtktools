@@ -10,7 +10,7 @@ from vmtk import vtkvmtk
 def ExtractCylindricInterpolationVoronoiDiagram(cellId,pointId,cylinderRadius,voronoi,centerlines):
     isInside = 0
 
-    if (cellId == 0):
+    if cellId == 0:
         cylinderTop = centerlines.GetPoint(pointId) 
         cylinderCenter = centerlines.GetPoint(pointId - interpolationHalfSize)
         cylinderBottom = centerlines.GetPoint(pointId - 2*interpolationHalfSize) 
@@ -496,7 +496,7 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
         endHalfInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(endId, 
                                                     endCellPointId, endCellPointHalfRadius, 
                                                     clippedVoronoi, patchCenterlines)
-   
+        
         # Find and insert new points
         newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId,
                                                     startId, endId, startInterpolationDataset,
@@ -553,17 +553,11 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
             endHalfInterpolationDataset = ExtractCylindricInterpolationVoronoiDiagram(endId_, endId,
                                                         endRHalf, clippedVoronoi,
                                                         endCell)
-
+            
             newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId,
                                                         1, 2, startInterpolationDataset,
                                                         endHalfInterpolationDataset, 
                                                         bif_, 1, clippingPoints)
-            if lower and i + 2 == len(bif):
-                newVoronoiPoints, newVoronoiPointsMISR = remove_points(newVoronoiPoints, 
-                                                            newVoronoiPointsMISR, bif,
-                                                            interpolatedCenterlines,
-                                                            clippingPoints)
-
 
             completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                         newVoronoiPointsMISR)
@@ -573,11 +567,6 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                         startHalfInterpolationDataset, 
                                                         bif_, -1, clippingPoints)
             
-            if lower and i + 2 == len(bif):
-                newVoronoiPoints, newVoronoiPointsMISR = remove_points(newVoronoiPoints,
-                                                           newVoronoiPointsMISR, bif,
-                                                           interpolatedCenterlines,clippingPoints)
-
             completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                             newVoronoiPointsMISR)
 
