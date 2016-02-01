@@ -139,12 +139,6 @@ def InterpolatePatchCenterlines(patchCenterlines, parentCenterlines,
             interpolatedCellArray.InsertCellPoint(pointsInserted + j)
         pointsInserted += splinePoints.GetNumberOfPoints()
 
-        #tmpLines = vtk.vtkPolyData()
-        #tmpLines.SetPoints(interpolatedPoints)
-        #tmpLines.SetLines(interpolatedCellArray)
-        #viz(tmpLines)
-
-
     interpolatedLines.SetPoints(interpolatedPoints)
     interpolatedLines.SetLines(interpolatedCellArray)
  

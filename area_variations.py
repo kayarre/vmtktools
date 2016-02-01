@@ -32,22 +32,10 @@ def read_command_line():
 
     args = parser.parse_args()
 
-
     if args.ratio is not None and args.beta != 0.5:
-        print "WARNING: The beta value you gave will be ignored"
+        print "WARNING: The beta value you provided will be ignored."
 
-    if args.ratio is not None:
-        if not path.isfile(path.join(args.dir_path, args.case, "manifest.txt")):
-            print "Error: There need to be a manifest.txt to use --ratio"
-            sys.exit(0)
-        parameters = getParameters(path.join(args.dir_path, args.case))
-        if not parameters.has_key("max_min_ratio_area"):
-            print "Error: Run area_variation with the flag --stats True first."
-            sys.exit(0)
-        old = parameters["max_min_ratio_area"]
-        args.beta = 0.5 * math.log(args.ratio / old) / math.log(old)
-
-    return args.s, args.beta, args.stats, args.dir_path, args.case, args.stop
+    return args.s, args.beta, args.stats, args.dir_path, args.case, args.stop, args.ratio
 
 
 def move_past_sphere(centerline, i):
@@ -223,7 +211,60 @@ def get_lineToChange(centerline, tol, stop):
     return lineToChange
 
 
-def change_area(voronoi, lineToChange, tol, beta):
+def get_factor(lineToChange, beta, ratio):
+    # Array to change the radius
+    area = get_array("CenterlineSectionArea", lineToChange)
+    for i in range(10):
+        area = gaussian_filter(area, 6)
+    mean = np.mean(area)
+
+    if ratio is not None:
+        R_old = area.max() / area.min()
+        beta = 0.5 * math.log(ratio / R_old) / math.log(ratio) + 1
+        R = 1e10
+        a = 0
+        b = 2
+        sign = 0 if ratio > R_old else 1
+        max_iter = 30
+        iter = 0
+
+        while abs(R - ratio) >= 0.001 and iter < max_iter:
+            #print beta - 1, "Diff:", abs(R - ratio)
+            factor_ = (area / mean)**(beta-1)
+            k = round(factor_.shape[0] * 0.10, 0)
+            l = factor_.shape[0] - k*2
+            trans = np.asarray(np.linspace(1, 0, k).tolist() +
+            np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
+            factor = factor_[:,0]*(1-trans) + trans
+
+            area_new = (np.sqrt(area[:,0]/math.pi)*factor)**2 * math.pi
+            R = area_new.max() / area_new.min()
+            
+            print "R now:", R, "Want:", ratio, "R_old:", R_old
+            if R < ratio:
+                a = beta
+                beta = a + (b - a) / 2.
+            else:
+                b = beta
+                beta = a + (b - a) / 2.
+
+            iter += 1
+
+        print beta - 1
+
+    else:
+        factor_ = (area / mean)**beta
+
+        # A linear transition of the old and new geometry
+        k = round(factor_.shape[0] * 0.10, 0)
+        l = factor_.shape[0] - k*2
+        trans = np.asarray(np.linspace(1, 0, k).tolist() + np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
+        factor = factor_[:,0]*(1-trans) + trans
+
+    return factor
+
+
+def change_area(voronoi, lineToChange, tol, beta, ratio):
     # NEW: Check if voronoi point is within 1.5*MISR of centerline.
     #      So, this means change MISR of lineToChange, due to extreme
     #      circleness
@@ -249,19 +290,8 @@ def change_area(voronoi, lineToChange, tol, beta):
     lastSphere.SetRadius(r * 1.5)
     lastSphere.SetCenter(c1)
 
-    # Array to change the radius
-    area = get_array("CenterlineSectionArea", lineToChange)
-    for i in range(10):
-        area = gaussian_filter(area, 6)
-    mean = np.mean(area)
-    factor_ = (area / mean)**beta
-
-    # A linear transition of the old and new geometry
-    k = round(factor_.shape[0] * 0.10, 0)
-    l = factor_.shape[0] - k*2
-    trans = np.asarray(np.linspace(1, 0, k).tolist() + np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
-    factor = factor_[:,0]*(1-trans) + trans
-    one = np.zeros(factor_.shape[0]) + 1
+    # Get factor    
+    factor = get_factor(lineToChange, beta, ratio)
 
     # Locator to find closest point on centerline
     locator = get_locator(lineToChange)
@@ -307,7 +337,7 @@ def change_area(voronoi, lineToChange, tol, beta):
     return newVoronoi
 
 
-def main(folder, beta, smooth, stats, stop):
+def main(folder, beta, smooth, stats, stop, r_change):
     # Naming convention
     model_path = path.join(folder, "surface", "model.vtp")
     model_smoothed_path = path.join(folder, "surface", "model_smoothed.vtp")
@@ -364,7 +394,7 @@ def main(folder, beta, smooth, stats, stop):
         length, area = get_stats(centerline_area, folder, centerlines)
     else:
         # Change and compute the new voronoi diagram
-        newvoronoi = change_area(voronoi, centerline_area, tol, beta)
+        newvoronoi = change_area(voronoi, centerline_area, tol, beta, ratio)
         WritePolyData(newvoronoi, voronoi_new_path)
 
         # Make new surface
@@ -375,53 +405,52 @@ def main(folder, beta, smooth, stats, stop):
 
 
 if __name__ == '__main__':
-    smooth, beta, stats, basefolder, case, stop = read_command_line()
+    smooth, beta, stats, basefolder, case, stop, ratio = read_command_line()
     #folders = []
     folders = listdir(basefolder) if case is None else [case]
     #folders = folders + listdir(path.join(basefolder, "new_cases"))
-    #folders = ["N0123", "N0124", "N0125", "N0132"]
-    folders = ["A0026", "A0027"]
-    color = ["r", "k", "b"]
+    #folders = ["N0124", "N0123", "N0125"]
+    #folders = ["A0026", "A0027"]
+    #color = ["c", "k", "r"]
     #label = {"N0123": "Orginal", "N0124": "-1 SD", "N0125": "+1 SD", "N0132": "+2 SD"}
-    from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
-                                 xlabel, ylabel, tight_layout, axis, subplot, \
-                                 tick_params
+    #from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
+    #                             xlabel, ylabel, tight_layout, axis, subplot, \
+    #                             tick_params, xlim
 
-    #ax = subplot(111)
-    f = figure(figsize=(4.6, 10))
-    #ax.set_figure(f)
+    #f = figure(figsize=(10, 3))
     for i, folder in enumerate(folders):
-        if folder.startswith("A0"): #or folder.startswith("P0")) and \
+        if folder.startswith("P0"): #or folder.startswith("P0")) and \
           #not ".png" in folder or folder.startswith("N0"):
             #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
             #if folder in ["C0087", "C0093"]:
             #    continue
             print "Working on:", folder
             case = path.join(basefolder, folder)
-            length, a = main(case, beta, smooth, stats, stop)
-            f = plot(a, length, label=folder, linewidth=3, color=color[i])
-            #legend()
-            hold("on")
-    xlabel("Area")
-    #ax.spines['right'].set_visible(False)
-    #ax.spines['top'].set_visible(False)
-    #ax.xaxis.set_ticks_position('bottom')
-    #ax.yaxis.set_ticks_position('left')
-    #ax.spines['left'].set_visible(False)
+            length, a = main(case, beta, smooth, stats, stop, ratio)
+            #f = plot(length, a, label=label[folder], linewidth=2, color=color[i])
+            #hold("on")
+    #ylabel("Area", fontsize="large")
+
+    #### FOR AREA VARIATION PLOT ####
+    """
+    tick_params(
+        axis='y',          # changes apply to the y-axis
+        which='both',      # both major and minor ticks are affected
+        left='off',        # ticks along the bottom edge are off
+        right='off',       # ticks along the top edge are off
+        labelleft='off')   # labels along the bottom edge are off
 
     tick_params(
         axis='y',          # changes apply to the y-axis
         which='both',      # both major and minor ticks are affected
-        left='off',      # ticks along the bottom edge are off
-        right='off',         # ticks along the top edge are off
-        labelleft='off') # labels along the bottom edge are off
+        top='off')         # ticks
+    """
+    #### ------------ ####
 
-    tick_params(
-        axis='y',          # changes apply to the y-axis
-        which='both',      # both major and minor ticks are affected
-        top='off')      # ticks
-    #ylabel("Length")
-    #axis('off')
-    tight_layout()
-    savefig("area_variations_%s.png" % folder, pad_inches=0)
+    #xlabel("Length", fontsize="large")
+    #xlim([0, 140])
+    #legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=3, mode="expand",
+    #                borderaxespad=0., fontsize="large")
+    #tight_layout()
+    #savefig("area_variations_%s.eps" % folder) # pad_size=0
     #show()
