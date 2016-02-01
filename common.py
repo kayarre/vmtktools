@@ -91,9 +91,9 @@ def remove_distant_points(voronoi, centerline):
         ID = locator.FindClosestPoint(point)
         cl_point = centerline.GetPoint(ID)
         dist = math.sqrt(distance(point, cl_point))
-        comp = (47.424041748046875, 43.039527893066406, 41.241416931152344)
-        if get_data(i) > 1.7 and math.sqrt(distance(point, comp)) < 0.2:#dist/3 > get_data(i) or get_data(i) > limit:
-            print point
+        #comp = (47.424041748046875, 43.039527893066406, 41.241416931152344)
+        if dist/3 > get_data(i) or get_data(i) > limit:
+            #print point
             count += 1
             continue
 
