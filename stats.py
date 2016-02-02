@@ -100,16 +100,16 @@ if __name__ == "__main__":
     #folders += [path.join(folder_path, c) for c in listdir(folder_path) if c.startswith("C0")]
 
     # Healty cases
-    #folders += [path.join(folder_path, c) for c in listdir(folder_path) if
-    #        c.startswith("P0")]
+    folders += [path.join(folder_path, c) for c in listdir(folder_path) if
+            c.startswith("P0")]
 
     # Anu cases TER ICA/MCA
     #folders += [path.join(folder_path, "new_cases", c) for c in \
     #                listdir(path.join(folder_path, "new_cases")) if c.startswith("C0")]
 
     # Manipulates area cases
-    folders += [path.join(folder_path, c) for c in listdir(folder_path) if c.startswith("A0")]
-    folders.sort(key=lambda x: float(x.split("/")[-1][1:]))
+    #folders += [path.join(folder_path, c) for c in listdir(folder_path) if c.startswith("A0")]
+    #folders.sort(key=lambda x: float(x.split("/")[-1][1:]))
 
     for folder in folders:
         if "C0093" in folder or "C0087" in folder: continue
@@ -154,7 +154,9 @@ if __name__ == "__main__":
     sys.exit(0)
     """
 
+    
     R = getParameter(info, "max_min_ratio_area")
+    """
     origin = getParameter(info, "origin")
     origin = [o.split(sep)[-3] for o in origin]
     base = "/home/aslak/master/src/aneurysms"
@@ -174,25 +176,26 @@ if __name__ == "__main__":
         print "+ SD diff", abs(r_original - R_tmp[index_mean])
         print "+2SD diff", abs(r_original - R_tmp[index_max])
         print ""
-    
+    """
+
     C = getParameter(info, "min_circleness")
     E = getParameter(info, "local_max_stepest_disent")
     r_max = getParameter(info, "max_mean_ratio_area")
     r_min = getParameter(info, "min_mean_ratio_area")
     
-    beta = []
-    for value in info.itervalues():
-        folder_path = value["origin"].split("/")
-        beta.append(float(folder_path[-1].split("_")[2]))
+    #beta = []
+    #for value in info.itervalues():
+    #    folder_path = value["origin"].split("/")
+    #    beta.append(float(folder_path[-1].split("_")[2]))
 
-    status = [0 for i in range(len(beta))]
-    for i in range(len(beta) // 3):
-        beta_tmp = beta[i*3:(i+1)*3]
+    #status = [0 for i in range(len(beta))]
+    #for i in range(len(beta) // 3):
+    #    beta_tmp = beta[i*3:(i+1)*3]
 
-        index = beta_tmp.index(min(beta_tmp))
-        status[i*3 + index] = 2
-        index = beta_tmp.index(max(beta_tmp))
-        status[i*3 + index] = 1
+     #   index = beta_tmp.index(min(beta_tmp))
+     #   status[i*3 + index] = 2
+     #   index = beta_tmp.index(max(beta_tmp))
+     #   status[i*3 + index] = 1
     
 
     """
@@ -206,17 +209,20 @@ if __name__ == "__main__":
     """
 
     print "Total number of cases:", len(R)
+
+    mean, SD = find_SD(R)
+    print mean, SD
     
-    num_2sd = sum([s == 1 for s in status])
-    num_msd = sum([s == 2 for s in status])
-    num_psd = sum([s == 0 for s in status])
+    #num_2sd = sum([s == 1 for s in status])
+    #num_msd = sum([s == 2 for s in status])
+    #num_psd = sum([s == 0 for s in status])
     leg = ["R", "Circleness", "A'(s)", "R_max", "R_min"]
     #top_leg = ["Healty (10)", "Unruptured (%s)" % num_unruptured, "Ruptured (%s)" % num_ruptured]
-    top_leg = ["  + SD (%s)" % num_2sd, "   +2SD (%s)" % num_msd, "   - SD (%s)" % num_psd]
+    #top_leg = ["  + SD (%s)" % num_2sd, "   +2SD (%s)" % num_msd, "   - SD (%s)" % num_psd]
     
     for i in range(3):
         print "=" *15
-        print top_leg[i]
+        #print top_leg[i]
         print "="*15
         for j, data in enumerate([R, C, E, r_max, r_min]):
             tmp = []

@@ -13,8 +13,8 @@ cases = [c for c in cases if c.startswith("P0")]
 cases.sort()
 print cases
 for case in cases:
-    if case == cases[0]:
-        continue
+    #if case == cases[0]:
+    #    continue
     print "="*50
     print "     Rotate up", case
     print "="*50
@@ -25,6 +25,8 @@ for case in cases:
     print cmd
     output = check_output(cmd, stderr=STDOUT, shell=True)
     print output
+
+    sys.exit(0)
 
     print "="*50
     print "    Rotate down", case
