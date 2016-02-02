@@ -38,7 +38,7 @@ def read_command_line():
     parser.add_argument("--bif", type=bool, default=False, 
                         help="interpolate bif as well")
     parser.add_argument("--w", type=bool, default=False, help="Use the weighted" + \
-                        "center")
+                        " center")
     parser.add_argument("--version", type=bool, default=True, help="Type of" + \
                         "interpolation")
     parser.add_argument("--addPoint", type=bool, default=False,
@@ -465,7 +465,8 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
                                                        rotated_voronoi,
                                                        end_points_rotated[0],
                                                        bif, lower, cylinder_factor)
-    interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
+    # TODO: Move this to parallell transport instead, to make it more robust.
+    #interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
 
     WritePolyData(interpolated_voronoi, voronoi_angle_path) 
 

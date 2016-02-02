@@ -433,6 +433,16 @@ def InsertNewVoronoiPoints(oldDataset, newPoints, newArray):
    return newDataset
 
 
+def remove_extreme_points(points, r):
+    print type(points)
+    print type(r)
+    print len(points)
+    print len(r)
+    print points
+    print r
+    sys.exit(0)
+
+
 def create_new_surface(completeVoronoiDiagram):
     modeller = vtkvmtk.vtkvmtkPolyBallModeller()
     modeller.SetInput(completeVoronoiDiagram)
@@ -503,6 +513,9 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                     endHalfInterpolationDataset, 
                                                     interpolatedCenterlines, 1,
                                                     clippingPoints)
+	
+	newVoronoiPoints, newVoronoiPointsMISR = remove_extreme_points(newVoronoiPoints, newVoronoiPointsMISR)
+
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                     newVoronoiPointsMISR)
         voronoi_test = make_new_voronoi(newVoronoiPoints, newVoronoiPointsMISR)
@@ -512,6 +525,7 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                     startHalfInterpolationDataset, 
                                                     interpolatedCenterlines, -1,
                                                     clippingPoints)
+	newVoronoiPoints, newVoronoiPointsMISR = remove_extreme_points(newVoronoiPoints, newVoronoiPointsMISR)
         completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                     newVoronoiPointsMISR)
 
@@ -559,7 +573,8 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                         endHalfInterpolationDataset, 
                                                         bif_, 1, clippingPoints)
 
-            completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
+            newVoronoiPoints, newVoronoiPointsMISR = remove_extreme_points(newVoronoiPoints, newVoronoiPointsMISR)
+	    completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints, 
                                                         newVoronoiPointsMISR)
 
             newVoronoiPoints, newVoronoiPointsMISR = VoronoiDiagramInterpolation(interpolationCellId, 
@@ -567,7 +582,8 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
                                                         startHalfInterpolationDataset, 
                                                         bif_, -1, clippingPoints)
             
-            completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
+            newVoronoiPoints, newVoronoiPointsMISR = remove_extreme_points(newVoronoiPoints, newVoronoiPointsMISR)
+	    completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                             newVoronoiPointsMISR)
 
 
