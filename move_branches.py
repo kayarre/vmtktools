@@ -10,7 +10,6 @@ import sys
 import math
 from time import time
 
-
 def read_command_line():
     """Read arguments from commandline"""
     parser = ArgumentParser()
@@ -422,7 +421,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
 
     rotated_voronoi = rotate_voronoi(voronoi_clipped, patch_cl, end_points[1], m, R)
     WritePolyData(rotated_voronoi, voronoi_rotated_path)
-    
+
     # Interpolate the centerline
     print "Interpolate centerlines and voronoi diagram."
     interpolated_cl = InterpolatePatchCenterlines(rotated_cl, centerline,
@@ -439,8 +438,15 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
             center = np.sum(div_points[1], axis=0)/3.
         else:
             # Skewed center
+            print "Skewed center"
             center = (1/9.)*div_points[1][0] + (4/9.)*div_points[1][1] + \
                      (4/9.)*div_points[1][2]
+            #center = (1/18.)*div_points[1][0] + (8.5/18.)*div_points[1][1] + \
+            #         (8.5/18.)*div_points[1][2]
+            #print "skrewed center", center
+            #print "Normal center", np.sum(div_points[1], axis=0)/3.
+            #sys.exit(0)
+
         div_points_rotated_bif[0].SetPoint(0, center[0], center[1], center[2])
         interpolated_bif_lower = InterpolatePatchCenterlines(rotated_bif, centerline_bif,
                                                              div_points_rotated_bif[0].GetPoint(0),
@@ -466,7 +472,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
                                                        end_points_rotated[0],
                                                        bif, lower, cylinder_factor)
     # TODO: Move this to parallell transport instead, to make it more robust.
-    #interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
+    interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
 
     WritePolyData(interpolated_voronoi, voronoi_angle_path) 
 

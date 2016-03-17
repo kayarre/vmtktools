@@ -214,30 +214,41 @@ def get_lineToChange(centerline, tol, stop):
 def get_factor(lineToChange, beta, ratio):
     # Array to change the radius
     area = get_array("CenterlineSectionArea", lineToChange)
-    for i in range(10):
-        area = gaussian_filter(area, 6)
+    for i in range(2):
+        area = gaussian_filter(area, 5)
     mean = np.mean(area)
 
     if ratio is not None:
+        # Inital guess
         R_old = area.max() / area.min()
         beta = 0.5 * math.log(ratio / R_old) / math.log(ratio) + 1
+
+        # Parameters for algorithm
         R = 1e10
         a = 0
         b = 2
-        sign = 0 if ratio > R_old else 1
         max_iter = 30
         iter = 0
 
-        while abs(R - ratio) >= 0.001 and iter < max_iter:
-            #print beta - 1, "Diff:", abs(R - ratio)
-            factor_ = (area / mean)**(beta-1)
-            k = round(factor_.shape[0] * 0.10, 0)
-            l = factor_.shape[0] - k*2
-            trans = np.asarray(np.linspace(1, 0, k).tolist() +
-            np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
-            factor = factor_[:,0]*(1-trans) + trans
+        # Exclude first and last 10 %
+        area_ = area[int(area.shape[0]*0.02):-int(area.shape[0]*0.02)]
 
-            area_new = (np.sqrt(area[:,0]/math.pi)*factor)**2 * math.pi
+        #print "Area 80% max:", area_.max(), "area min", area_.min()
+        #print "Area full max:", area.max(), "area min", area.min()
+
+        while abs(R - ratio) >= 0.001 and iter < max_iter:
+            # Compute factor
+            factor_ = (area_ / mean)**(beta-1)
+            
+            # Include transition or not
+            #k = round(area.shape[0] * 0.05, 0)
+            #l = factor_.shape[0] - k*2
+            #trans = np.asarray(np.linspace(0.5, 0, k).tolist() + \
+            #         np.zeros(l).tolist() + np.linspace(0, 0.5, k).tolist())
+            #factor = factor_[:,0]*(1-trans) + trans
+
+            # Compute new area
+            area_new = ((np.sqrt(area_/ math.pi)*factor_)**2 * math.pi)
             R = area_new.max() / area_new.min()
             
             print "R now:", R, "Want:", ratio, "R_old:", R_old
@@ -251,15 +262,16 @@ def get_factor(lineToChange, beta, ratio):
             iter += 1
 
         print beta - 1
+        beta = beta - 1
 
-    else:
-        factor_ = (area / mean)**beta
+    # Compute factor with chosen beta
+    factor_ = (area / mean)**beta
 
-        # A linear transition of the old and new geometry
-        k = round(factor_.shape[0] * 0.10, 0)
-        l = factor_.shape[0] - k*2
-        trans = np.asarray(np.linspace(1, 0, k).tolist() + np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
-        factor = factor_[:,0]*(1-trans) + trans
+    # A linear transition of the old and new geometry
+    k = round(factor_.shape[0] * 0.10, 0)
+    l = factor_.shape[0] - k*2 - int(k*0.5)
+    trans = np.asarray([1]*int(k*0.5) + np.linspace(1, 0, k).tolist() + np.zeros(l).tolist() + np.linspace(0, 1, k).tolist())
+    factor = factor_[:,0]*(1-trans) + trans
 
     return factor
 
@@ -271,7 +283,7 @@ def change_area(voronoi, lineToChange, tol, beta, ratio):
     # OLD: Tube function to evaluate if the voronoi point should be changed
 
     arrayForTube = get_vtk_array("TubeRadius", 1, lineToChange.GetNumberOfPoints())
-    MISR = get_array(radiusArrayName, lineToChange)*1.5
+    MISR = get_array(radiusArrayName, lineToChange)*1.7
     for i in range(MISR.shape[0]):
         arrayForTube.SetTuple1(i, MISR[i])
     lineToChange.GetPointData().AddArray(arrayForTube)
@@ -341,7 +353,10 @@ def main(folder, beta, smooth, stats, stop, r_change):
     # Naming convention
     model_path = path.join(folder, "surface", "model.vtp")
     model_smoothed_path = path.join(folder, "surface", "model_smoothed.vtp")
-    s = "%s" % beta if not smooth else "%s_smooth" % beta
+    if ratio is not None:
+        s = "ratio_%s" % ratio if not smooth else "ratio_%s_smooth" % ratio
+    else:
+        s = "%s" % beta if not smooth else "%s_smooth" % beta
     model_area_path = path.join(folder, "surface", "model_area_%s.vtp" % s)
     voronoi_path = path.join(folder, "surface", "voronoi.vtp")
     voronoi_smoothed_path = path.join(folder, "surface", "voronoi_smoothed.vtp")
@@ -394,11 +409,15 @@ def main(folder, beta, smooth, stats, stop, r_change):
         length, area = get_stats(centerline_area, folder, centerlines)
     else:
         # Change and compute the new voronoi diagram
+        print "Change Voronoi diagram"
         newvoronoi = change_area(voronoi, centerline_area, tol, beta, ratio)
+        print "Write Voronoi diagram"
         WritePolyData(newvoronoi, voronoi_new_path)
 
         # Make new surface
+        print "Create surface"
         surface_smoothed = create_new_surface(newvoronoi)
+        print "Write surface", model_area_path
         WritePolyData(surface_smoothed, model_area_path)
 
     return length, area
@@ -408,6 +427,7 @@ if __name__ == '__main__':
     smooth, beta, stats, basefolder, case, stop, ratio = read_command_line()
     #folders = []
     folders = listdir(basefolder) if case is None else [case]
+    #folders = listdir(path.join(basefolder, "new_cases"))
     #folders = folders + listdir(path.join(basefolder, "new_cases"))
     #folders = ["N0124", "N0123", "N0125"]
     #folders = ["A0026", "A0027"]
@@ -419,14 +439,15 @@ if __name__ == '__main__':
 
     #f = figure(figsize=(10, 3))
     for i, folder in enumerate(folders):
-        if folder.startswith("B0"): #or folder.startswith("P0")) and \
+        if folder.startswith("C0"): #or folder.startswith("P0")) and \
           #not ".png" in folder or folder.startswith("N0"):
-            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
-            if folder in ["B0010", "C0087", "C0093"]:
-                continue
-            print "Working on:", folder
+            if folder in ["C0087", "C0093"]: continue
+            #if folder in ["B0010", "C0087", "C0093"]:
+            #    continue
+            #print "Working on:", folder
             case = path.join(basefolder, folder)
             length, a = main(case, beta, smooth, stats, stop, ratio)
+            print folder + ":", a[0]
             #f = plot(length, a, label=label[folder], linewidth=2, color=color[i])
             #hold("on")
     #ylabel("Area", fontsize="large")

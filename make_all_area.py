@@ -8,12 +8,12 @@ a = 0
 cases = listdir(dirpath)
 
 cases = [c for c in cases if c.startswith("P0")]
+cases.sort()
 
 base_command = "python area_variations.py --dir_path ../master/src/aneurysms" + \
                " --smooth True --ratio %s --case %s"
 
-print cases
-for case in cases[0:1]:
+for case in cases:
     # Get area ratio
     data = getParameters(path.join(dirpath, case))
     ratio = data["max_min_ratio_area"]
