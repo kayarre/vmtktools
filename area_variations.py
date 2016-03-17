@@ -427,15 +427,11 @@ def make_plots(smooth, beta, stats, basefolder, case, ratio):
 
     #f = figure(figsize=(10, 3))
     for i, folder in enumerate(folders):
-        if folder.startswith("P0"): 
-            #or folder.startswith("P0")) and \
-            #not ".png" in folder or folder.startswith("N0"):
-	    
-            # Skipp cases
-            if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
-	        #if folder in ["C0087", "C0093"]: continue
-
-	        # Get length and area of the centerline
+        if folder.startswith("B0"): #or folder.startswith("P0")) and \
+          #not ".png" in folder or folder.startswith("N0"):
+            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
+            if folder in ["B0010", "C0087", "C0093"]:
+                continue
             print "Working on:", folder
             case = path.join(basefolder, folder)
             length, a = main(case, beta, smooth, stats, ratio)

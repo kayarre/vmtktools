@@ -26,6 +26,8 @@ for case in cases:
     output = check_output(cmd, stderr=STDOUT, shell=True)
     print output
 
+    sys.exit(0)
+
     # Rotate down
     print "="*50
     print "    Rotate down", case
