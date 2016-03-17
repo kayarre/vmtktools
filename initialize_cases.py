@@ -83,7 +83,7 @@ def start_case(casepath, folder):
 
 if __name__ == "__main__":
     dir = read_command_line()
-    cases = ["C0066"]
+    cases = ["P0086"]
     #for folder in listdir(dir):
     for folder in cases:
         print folder

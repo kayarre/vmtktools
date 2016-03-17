@@ -35,7 +35,7 @@ def get_curvilinear_coordinate(line):
     for i in range(line.GetNumberOfPoints() - 1):
         pnt1 = np.asarray(line.GetPoints().GetPoint(i))
         pnt2 = np.asarray(line.GetPoints().GetPoint(i+1))
-        curv_coor[i+1] = np.sum(np.sqrt((pnt1 - pnt2)**2)) + curv_coor[i]
+        curv_coor[i+1] = np.sqrt(np.sum((pnt1 - pnt2)**2)) + curv_coor[i]
 
     return curv_coor
 

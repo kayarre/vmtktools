@@ -22,20 +22,20 @@ def read_command_line():
             help="The new voronoi diagram is computed as (A/mean)**beta*r_old," + \
             " over the respective area. If beta < -1 the geometry will be more even, and" + \
             " if beta > 1, the differences in the geometry will be larger")
-    parser.add_argument("--stop", type=bool, default=False)
     parser.add_argument("--ratio", type=float, default=None, help="Wanted ratio" + \
                        " A_max/A_min, when this is given beta will be ignored" + \
                        " and beta computed such that this will (approxematly)" + \
                        " be the result")
     parser.add_argument("--stats", type=bool, default=False,
                         help="Collect stats")
+    parser.add_argument("--make_plot", type=bool, default=False, help="Make plots")
 
     args = parser.parse_args()
 
     if args.ratio is not None and args.beta != 0.5:
         print "WARNING: The beta value you provided will be ignored."
 
-    return args.s, args.beta, args.stats, args.dir_path, args.case, args.stop, args.ratio
+    return args.s, args.beta, args.stats, args.dir_path, args.case, args.ratio, args.make_plot
 
 
 def move_past_sphere(centerline, i):
@@ -182,14 +182,11 @@ def get_stats(centerline_area, folder, centerline):
     return length, area
 
 
-def get_lineToChange(centerline, tol, stop):
-    # NEW: Choose the lowest bif, this could either be something in the siphon,
-    # the aneurism or ICA terminus.
-   
+def get_lineToChange(centerline, tol):
     line2 = ExtractSingleLine(centerline, 0)
     numberOfPoints2 = line2.GetNumberOfPoints()
 
-    n = centerline.GetNumberOfCells() if not stop else 2
+    n = 2
     pointIDs = []
     for j in range(1, n):
         line1 = ExtractSingleLine(centerline, j)
@@ -203,10 +200,24 @@ def get_lineToChange(centerline, tol, stop):
                 pointID = i
                 break
 
-        pointIDs.append(pointID)#move_past_sphere(line2, pointID))
+        pointIDs.append(pointID) #move_past_sphere(line2, pointID))
 
     pointID = min(pointIDs)
     lineToChange = ExtractSingleLine(centerline, 0, endID=pointID)
+    lineToChange = splineCenterline(lineToChange, nknots=25)
+    
+    curvature = get_array("Curvature", line)
+    curvature = get_array("Torsion", line)
+    length = get_curvilinear_coordinate(line)
+    
+    from matplotlib.pylab import *
+    length = get_curvilinear_coordinate(lineToChange)
+    plot(length, curvature)
+    hold("on")
+    plot(length, torsion)
+    show()
+    
+    sys.exit(0)
 
     return lineToChange
 
@@ -337,7 +348,7 @@ def change_area(voronoi, lineToChange, tol, beta, ratio):
     return newVoronoi
 
 
-def main(folder, beta, smooth, stats, stop, r_change):
+def main(folder, beta, smooth, stats, r_change):
     # Naming convention
     model_path = path.join(folder, "surface", "model.vtp")
     model_smoothed_path = path.join(folder, "surface", "model_smoothed.vtp")
@@ -374,9 +385,8 @@ def main(folder, beta, smooth, stats, stop, r_change):
                                 centerlines.GetPoint(11)))
     tol = centerlineSpacing / divergingRatioToSpacingTolerance
 
-
     if not path.exists(centerline_area_spline_path):
-        centerline_to_change = get_lineToChange(centerlines, tol, stop)
+        centerline_to_change = get_lineToChange(centerlines, tol)
         WritePolyData(centerline_to_change, centerline_area_spline_path)
         
         centerline_splined = splineCenterline(centerline_to_change, 20)
@@ -404,32 +414,37 @@ def main(folder, beta, smooth, stats, stop, r_change):
     return length, area
 
 
-if __name__ == '__main__':
-    smooth, beta, stats, basefolder, case, stop, ratio = read_command_line()
-    #folders = []
-    folders = listdir(basefolder) if case is None else [case]
-    #folders = folders + listdir(path.join(basefolder, "new_cases"))
-    #folders = ["N0124", "N0123", "N0125"]
-    #folders = ["A0026", "A0027"]
-    #color = ["c", "k", "r"]
-    #label = {"N0123": "Orginal", "N0124": "-1 SD", "N0125": "+1 SD", "N0132": "+2 SD"}
-    #from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
-    #                             xlabel, ylabel, tight_layout, axis, subplot, \
-    #                             tick_params, xlim
+def make_plots(smooth, beta, stats, basefolder, case, ratio):
+    folders = []
+    folders = folders + listdir(path.join(basefolder, "new_cases"))
+    folders = ["N0124", "N0123", "N0125"]
+    folders = ["A0026", "A0027"]
+    color = ["c", "k", "r"]
+    label = {"N0123": "Orginal", "N0124": "-1 SD", "N0125": "+1 SD", "N0132": "+2 SD"}
+    from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
+                                 xlabel, ylabel, tight_layout, axis, subplot, \
+                                 tick_params, xlim
 
     #f = figure(figsize=(10, 3))
     for i, folder in enumerate(folders):
-        if folder.startswith("P0"): #or folder.startswith("P0")) and \
-          #not ".png" in folder or folder.startswith("N0"):
-            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
-            #if folder in ["C0087", "C0093"]:
-            #    continue
+        if folder.startswith("P0"): 
+            #or folder.startswith("P0")) and \
+            #not ".png" in folder or folder.startswith("N0"):
+	    
+            # Skipp cases
+            if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
+	        #if folder in ["C0087", "C0093"]: continue
+
+	        # Get length and area of the centerline
             print "Working on:", folder
             case = path.join(basefolder, folder)
-            length, a = main(case, beta, smooth, stats, stop, ratio)
-            #f = plot(length, a, label=label[folder], linewidth=2, color=color[i])
-            #hold("on")
-    #ylabel("Area", fontsize="large")
+            length, a = main(case, beta, smooth, stats, ratio)
+
+            # Plot
+            f = plot(length, a, label=label[folder], linewidth=2, color=color[i])
+            hold("on")
+
+        ylabel("Area", fontsize="large")
 
     #### FOR AREA VARIATION PLOT ####
     """
@@ -445,7 +460,6 @@ if __name__ == '__main__':
         which='both',      # both major and minor ticks are affected
         top='off')         # ticks
     """
-    #### ------------ ####
 
     #xlabel("Length", fontsize="large")
     #xlim([0, 140])
@@ -454,3 +468,20 @@ if __name__ == '__main__':
     #tight_layout()
     #savefig("area_variations_%s.eps" % folder) # pad_size=0
     #show()
+
+
+if __name__ == '__main__':
+    smooth, beta, stats, basefolder, case, ratio, make_plot = read_command_line()
+    
+    if make_plot:
+        make_plots(smooth, beta, stats, basefolder, case, ratio)
+
+    folders = listdir(basefolder) if case is None else [case]
+
+    for i, folder in enumerate(folders):
+        if folder.startswith("P0"):
+            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
+            #if folder in ["C0087", "C0093"]: continue
+            print "Working on:", folder
+            case = path.join(basefolder, folder)
+            main(case, beta, smooth, stats, ratio)
