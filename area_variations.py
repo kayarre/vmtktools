@@ -210,15 +210,6 @@ def get_lineToChange(centerline, tol):
     curvature = get_array("Torsion", line)
     length = get_curvilinear_coordinate(line)
     
-    from matplotlib.pylab import *
-    length = get_curvilinear_coordinate(lineToChange)
-    plot(length, curvature)
-    hold("on")
-    plot(length, torsion)
-    show()
-    
-    sys.exit(0)
-
     return lineToChange
 
 
@@ -419,7 +410,8 @@ def make_plots(smooth, beta, stats, basefolder, case, ratio):
     folders = folders + listdir(path.join(basefolder, "new_cases"))
     folders = ["N0124", "N0123", "N0125"]
     folders = ["A0026", "A0027"]
-    color = ["c", "k", "r"]
+    folders = ["A0040", "A0041"]
+    color = ["r", "k", "c"]
     label = {"N0123": "Orginal", "N0124": "-1 SD", "N0125": "+1 SD", "N0132": "+2 SD"}
     from matplotlib.pylab import figure, legend, plot, savefig, show, hold, \
                                  xlabel, ylabel, tight_layout, axis, subplot, \
@@ -428,8 +420,6 @@ def make_plots(smooth, beta, stats, basefolder, case, ratio):
     #f = figure(figsize=(10, 3))
     for i, folder in enumerate(folders):
         if folder.startswith("B0"): #or folder.startswith("P0")) and \
-          #not ".png" in folder or folder.startswith("N0"):
-            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
             if folder in ["B0010", "C0087", "C0093"]:
                 continue
             print "Working on:", folder
@@ -437,13 +427,12 @@ def make_plots(smooth, beta, stats, basefolder, case, ratio):
             length, a = main(case, beta, smooth, stats, ratio)
 
             # Plot
-            f = plot(length, a, label=label[folder], linewidth=2, color=color[i])
+            f = plot(length, a, linewidth=3, color=color[i])
             hold("on")
 
-        ylabel("Area", fontsize="large")
+        ylabel("Area", fontsize=20)
 
     #### FOR AREA VARIATION PLOT ####
-    """
     tick_params(
         axis='y',          # changes apply to the y-axis
         which='both',      # both major and minor ticks are affected
@@ -455,15 +444,10 @@ def make_plots(smooth, beta, stats, basefolder, case, ratio):
         axis='y',          # changes apply to the y-axis
         which='both',      # both major and minor ticks are affected
         top='off')         # ticks
-    """
 
-    #xlabel("Length", fontsize="large")
-    #xlim([0, 140])
-    #legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=3, mode="expand",
-    #                borderaxespad=0., fontsize="large")
-    #tight_layout()
-    #savefig("area_variations_%s.eps" % folder) # pad_size=0
-    #show()
+    tight_layout()
+    savefig("area_variations_%s.eps" % folder) # pad_size=0
+    show()
 
 
 if __name__ == '__main__':
@@ -476,8 +460,6 @@ if __name__ == '__main__':
 
     for i, folder in enumerate(folders):
         if folder.startswith("P0"):
-            #if folder in ["C0023", "C0099", "C0057b", "C0093", "C0087"]: continue
-            #if folder in ["C0087", "C0093"]: continue
             print "Working on:", folder
             case = path.join(basefolder, folder)
             main(case, beta, smooth, stats, ratio)

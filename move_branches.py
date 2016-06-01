@@ -16,7 +16,7 @@ def read_command_line():
     parser = ArgumentParser()
 
     parser.add_argument('--d', '--dir_path', type=str, default=".", 
-                        help="Path to the folder with all the cases")
+                        help="Path to the folder with all the case(s)")
     parser.add_argument('--case', type=str, default=None, help="Choose case")
     parser.add_argument('--s', '--smooth', type=bool, default=False,
                         help="If the original voronoi diagram (surface) should be" + \
@@ -465,6 +465,7 @@ def main(dirpath, smooth, smooth_factor, angle, l1, l2, bif, addPoint, lower,
                                                        rotated_voronoi,
                                                        end_points_rotated[0],
                                                        bif, lower, cylinder_factor)
+    
     # TODO: Move this to parallell transport instead, to make it more robust.
     #interpolated_voronoi = remove_distant_points(interpolated_voronoi, interpolated_cl)
 

@@ -184,6 +184,7 @@ def InterpolateSpline(startCell, endCell, additionalPoint):
     for i in range(len(points)-1):
         curv_coor[i+1] = curv_coor[i] + math.sqrt(distance(points[i], points[i+1]))
 
+    # FIXME: Test the effect of adding an extra distance
     # Increse the longest distances
     #base_line = curv_coor[0]
     #for i, c in enumerate(curv_coor):

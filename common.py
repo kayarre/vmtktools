@@ -14,7 +14,7 @@ divergingRatioToSpacingTolerance = 2.0
 distance = vtk.vtkMath.Distance2BetweenPoints
 interpolationHalfSize = 3
 polyBallImageSize = [200, 200, 200]
-
+version = vtk.vtkVersion().GetVTKMajorVersion()
 
 def ReadPolyData(filename):
     reader = vtk.vtkXMLPolyDataReader()
@@ -26,7 +26,10 @@ def ReadPolyData(filename):
 def WritePolyData(input, filename):
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(filename)
-    writer.SetInput(input)
+    if version < 6:
+        writer.SetInput(input)
+    else:
+        writer.SetInputData(input)
     writer.Write()
 
 

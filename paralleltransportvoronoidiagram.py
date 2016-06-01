@@ -445,7 +445,10 @@ def remove_extreme_points(points, r):
 
 def create_new_surface(completeVoronoiDiagram):
     modeller = vtkvmtk.vtkvmtkPolyBallModeller()
-    modeller.SetInput(completeVoronoiDiagram)
+    if version < 6:
+        modeller.SetInput(completeVoronoiDiagram)
+    else:
+	modeller.SetInputData(completeVoronoiDiagram)
     modeller.SetRadiusArrayName(radiusArrayName)
     modeller.UsePolyBallLineOff()
     modeller.SetSampleDimensions(polyBallImageSize)
