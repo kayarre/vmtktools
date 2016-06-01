@@ -13,8 +13,9 @@ AbscissasArrayName = 'Abscissas'
 divergingRatioToSpacingTolerance = 2.0
 distance = vtk.vtkMath.Distance2BetweenPoints
 interpolationHalfSize = 3
-polyBallImageSize = [200, 200, 200]
+polyBallImageSize = [250, 250, 250]
 version = vtk.vtkVersion().GetVTKMajorVersion()
+
 
 def ReadPolyData(filename):
     reader = vtk.vtkXMLPolyDataReader()
@@ -76,7 +77,7 @@ def get_locator(centerline):
     return locator
 
 
-def remove_distant_points(voronoi, centerline):
+def remove_distant_points(voronoi, centerline, limit=None):
     N = voronoi.GetNumberOfPoints()
     newVoronoi = vtk.vtkPolyData()
     cellArray = vtk.vtkCellArray()
@@ -85,8 +86,18 @@ def remove_distant_points(voronoi, centerline):
     
     locator = get_locator(centerline)
     get_data = voronoi.GetPointData().GetArray(radiusArrayName).GetTuple1
-    limit = get_data(0)
-    limit = limit * 10
+
+    N = voronoi.GetNumberOfPoints()
+    
+    if limit is None:
+        limit = []
+        m = N//500
+        steps = range(N)[::m]
+        for i in steps:
+            if 1 < get_data(i) < 10:
+                limit.append(get_data(i))
+        limit_ = np.median(limit) * 3
+        limit = lambda x, y, z: z / 3 > x or x > limit_
 
     count = 0
     for i in range(N):
@@ -95,21 +106,20 @@ def remove_distant_points(voronoi, centerline):
         cl_point = centerline.GetPoint(ID)
         dist = math.sqrt(distance(point, cl_point))
         #comp = (47.424041748046875, 43.039527893066406, 41.241416931152344)
-        if dist/3 > get_data(i) or get_data(i) > limit:
-            #print point
+        if limit(get_data(i), point, dist): #dist/3 > get_data(i) or get_data(i) > limit:
             count += 1
             continue
 
         points.InsertNextPoint(point)
         cellArray.InsertNextCell(1)
-        cellArray.InsertCellPoint(i-count)
+        cellArray.InsertCellPoint(i - count)
         value = get_data(i)
-        radius[i-count] = value
+        radius[i - count] = value
 
-    print "Removed %s points from the voronoi diagram" % count
+    print "Removed %s points from the voronoi diagram" % (count) 
     
-    radiusArray = get_vtk_array(radiusArrayName, 1, N-count)
-    for i in range(N-count):
+    radiusArray = get_vtk_array(radiusArrayName, 1, N - count)
+    for i in range(N - count):
         radiusArray.SetTuple(i, [float(radius[i])])
 
 

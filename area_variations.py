@@ -216,19 +216,28 @@ def get_lineToChange(centerline, tol):
 def get_factor(lineToChange, beta, ratio):
     # Array to change the radius
     area = get_array("CenterlineSectionArea", lineToChange)
-    for i in range(10):
-        area = gaussian_filter(area, 6)
+    for i in range(2):
+        area = gaussian_filter(area, 5)
     mean = np.mean(area)
 
     if ratio is not None:
+        # Inital guess
         R_old = area.max() / area.min()
         beta = 0.5 * math.log(ratio / R_old) / math.log(ratio) + 1
+
+        # Parameters for algorithm
         R = 1e10
         a = 0
         b = 2
         sign = 0 if ratio > R_old else 1
         max_iter = 30
         iter = 0
+
+        # Exclude first and last 10 %
+        area_ = area[int(area.shape[0]*0.02):-int(area.shape[0]*0.02)]
+
+        #print "Area 80% max:", area_.max(), "area min", area_.min()
+        #print "Area full max:", area.max(), "area min", area.min()
 
         while abs(R - ratio) >= 0.001 and iter < max_iter:
             #print beta - 1, "Diff:", abs(R - ratio)
@@ -253,6 +262,7 @@ def get_factor(lineToChange, beta, ratio):
             iter += 1
 
         print beta - 1
+        beta = beta - 1
 
     else:
         factor_ = (area / mean)**beta
@@ -273,7 +283,7 @@ def change_area(voronoi, lineToChange, tol, beta, ratio):
     # OLD: Tube function to evaluate if the voronoi point should be changed
 
     arrayForTube = get_vtk_array("TubeRadius", 1, lineToChange.GetNumberOfPoints())
-    MISR = get_array(radiusArrayName, lineToChange)*1.5
+    MISR = get_array(radiusArrayName, lineToChange)*1.7
     for i in range(MISR.shape[0]):
         arrayForTube.SetTuple1(i, MISR[i])
     lineToChange.GetPointData().AddArray(arrayForTube)
@@ -395,11 +405,15 @@ def main(folder, beta, smooth, stats, r_change):
         length, area = get_stats(centerline_area, folder, centerlines)
     else:
         # Change and compute the new voronoi diagram
+        print "Change Voronoi diagram"
         newvoronoi = change_area(voronoi, centerline_area, tol, beta, ratio)
+        print "Write Voronoi diagram"
         WritePolyData(newvoronoi, voronoi_new_path)
 
         # Make new surface
+        print "Create surface"
         surface_smoothed = create_new_surface(newvoronoi)
+        print "Write surface", model_area_path
         WritePolyData(surface_smoothed, model_area_path)
 
     return length, area

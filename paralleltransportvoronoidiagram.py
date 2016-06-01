@@ -434,13 +434,47 @@ def InsertNewVoronoiPoints(oldDataset, newPoints, newArray):
 
 
 def remove_extreme_points(points, r):
-    print type(points)
-    print type(r)
-    print len(points)
-    print len(r)
-    print points
-    print r
-    sys.exit(0)
+    #from IPython import embed; embed()
+
+    # Convert vtk to numpy array
+    r_array = np.zeros(points.GetNumberOfPoints())
+    for i in range(points.GetNumberOfPoints()):
+        r_array[i] = r.GetTuple1(i)
+
+    # Get n largest spheres
+    n = 10
+    ind = np.argpartition(r_array, -n)[-n:]
+    r_array[ind] = r_array[ind]*0.5
+    #n_max = r_array[ind]
+    #n_max.sort()
+
+    # Check if some of the differances is larger than normal
+    #diff = n_max - n_max[0] # or relative to smallest of max_n
+    #tol = diff[1]
+    #mark = diff > tol*3
+
+    #if np.sum(mark) == 0:
+    #    return points, r
+    #else:
+    #    print "Remove %s points" % np.sum(mark)
+
+    #ind_remove = ind[mark]
+    #r_new_array = r_array[ind_remove]
+    #N = points.GetNumberOfPoints() - np.sum(mark)
+    #new_points = vtk.vtkPoints()
+    new_r = create_vtk_array(r_array, radiusArrayName) 
+
+    #remove = 0
+    #for i in range(N):
+    #    if i in ind_remove:
+    #        remove += 1
+    #        continue
+    #    
+    #    new_points.InsertNextPoint(points.GetPoint(i))
+
+    #from IPython import embed; embed()
+
+    return points, r
 
 
 def create_new_surface(completeVoronoiDiagram):
@@ -589,5 +623,5 @@ def interpolate_voronoi_diagram(interpolatedCenterlines, patchCenterlines,
 	    completeVoronoiDiagram = InsertNewVoronoiPoints(completeVoronoiDiagram, newVoronoiPoints,
                                                             newVoronoiPointsMISR)
 
-
+            print "Number of points i V-d", completeVoronoiDiagram.GetNumberOfPoints()
     return completeVoronoiDiagram
